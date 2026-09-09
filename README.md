@@ -1,7 +1,7 @@
 # CSCE3444_Project
 Starting with ASL project, lets see how it goes
 Project Name: ASL Translation
-Project 
+Project Objective: Through ASL app anyone can understand the ASL. 
 Team role:
 1. Team lead :
 2. Frontend Developer :
