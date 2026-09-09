@@ -8,6 +8,6 @@ Team role:
 3. Backend Developer : Sajol Kumar
    
 Current Status: Initial project planning and repository setup completed.
-Project Link: 
+Project Board Link: https://github.com/users/g-allu/projects/2
 
    
