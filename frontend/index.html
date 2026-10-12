@@ -1,0 +1,67 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ASL Translator | The Thinkers</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <header class="header">
+    <h1>ASL Translator</h1>
+    <p>American Sign Language to English</p>
+  </header>
+
+  <main class="container">
+
+    <section class="camera-section">
+      <div class="section-heading">
+        <h2>Live Camera</h2>
+        <span id="cameraStatus" role="status">
+          Camera Off
+        </span>
+      </div>
+
+      <div class="camera-box">
+        <video id="camera" autoplay playsinline muted></video>
+        <p id="cameraPlaceholder">
+          Click Start Camera to begin
+        </p>
+      </div>
+
+      <div class="camera-controls">
+        <button id="startCamera">Start Camera</button>
+        <button id="stopCamera" disabled>Stop Camera</button>
+      </div>
+
+      <p id="errorMessage" role="alert"></p>
+    </section>
+
+    <section class="translation-section">
+      <h2>Translation Preview</h2>
+      <p class="note">
+        ASL recognition will be connected in the next feature.
+      </p>
+
+      <div class="result-box">
+        <h3>Detected Letter</h3>
+        <p id="detectedLetter">—</p>
+      </div>
+
+      <div class="transcript-box">
+        <h3>Translation Transcript</h3>
+        <p id="transcript">No translation yet</p>
+      </div>
+    </section>
+
+  </main>
+
+  <footer>
+    <p>Group 08 — The Thinkers | CSCE 3444</p>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
