@@ -1,4 +1,9 @@
 
+/* ASL Translator - Group 08 */
+/* The Thinkers - Frontend Styles */
+
+/* General Page Styling */
+
 * {
   box-sizing: border-box;
 }
@@ -8,7 +13,10 @@ body {
   font-family: Arial, sans-serif;
   background: #f4f6fa;
   color: #243247;
+  min-height: 100vh;
 }
+
+/* Header */
 
 .header {
   background: #17365d;
@@ -25,24 +33,38 @@ body {
 .header p {
   margin-bottom: 0;
   color: #dce8f5;
+  font-size: 15px;
 }
+
+/* Main Layout */
 
 .container {
   max-width: 1100px;
   margin: 35px auto;
   padding: 0 20px;
+
   display: grid;
   grid-template-columns: 1.4fr 1fr;
   gap: 25px;
+  align-items: start;
 }
+
+/* Main Panels */
 
 .camera-section,
 .translation-section {
   background: white;
   padding: 24px;
   border-radius: 12px;
-  box-shadow: 0 3px 14px rgba(0,0,0,0.08);
+  box-shadow: 0 3px 14px rgba(0, 0, 0, 0.08);
 }
+
+.camera-section h2,
+.translation-section h2 {
+  font-size: 22px;
+}
+
+/* Camera Header */
 
 .section-heading {
   display: flex;
@@ -55,19 +77,26 @@ body {
   margin-top: 0;
 }
 
+/* Camera Status */
+
 #cameraStatus {
   background: #e5e7eb;
   padding: 7px 12px;
   border-radius: 20px;
   font-size: 13px;
+  white-space: nowrap;
 }
+
+/* Camera Display */
 
 .camera-box {
   position: relative;
   background: #111827;
   border-radius: 10px;
   overflow: hidden;
+
   aspect-ratio: 4 / 3;
+
   display: flex;
   align-items: center;
   justify-content: center;
@@ -77,29 +106,41 @@ body {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
 }
 
 #cameraPlaceholder {
   position: absolute;
   color: white;
   text-align: center;
+  padding: 15px;
   pointer-events: none;
 }
+
+/* Camera Buttons */
 
 .camera-controls {
   display: flex;
   gap: 12px;
   margin-top: 20px;
+  flex-wrap: wrap;
 }
+
+/* All Buttons */
 
 button {
   padding: 12px 20px;
   border: none;
   border-radius: 7px;
+
   background: #235ba5;
   color: white;
+
   font-size: 14px;
+  font-weight: 500;
+
   cursor: pointer;
+  transition: background 0.2s ease;
 }
 
 button:hover:not(:disabled) {
@@ -111,10 +152,25 @@ button:disabled {
   cursor: not-allowed;
 }
 
+button:focus-visible,
+select:focus-visible {
+  outline: 3px solid #60a5fa;
+  outline-offset: 2px;
+}
+
+/* Camera Error Messages */
+
 #errorMessage {
   color: #b42318;
   font-size: 14px;
+  line-height: 1.5;
 }
+
+#errorMessage:empty {
+  display: none;
+}
+
+/* Translation Boxes */
 
 .result-box,
 .transcript-box {
@@ -125,33 +181,148 @@ button:disabled {
   margin-top: 18px;
 }
 
-#detectedLetter {
-  font-size: 44px;
-  font-weight: bold;
-  margin: 10px 0;
+.result-box h3,
+.transcript-box h3 {
+  margin-top: 0;
+  font-size: 17px;
 }
+
+/* Detected Letter */
+
+#detectedLetter {
+  font-size: 48px;
+  font-weight: bold;
+  margin: 15px 0;
+  min-height: 60px;
+  text-align: center;
+  color: #17365d;
+}
+
+/* Recognition Status */
+
+#recognitionStatus {
+  font-size: 14px;
+  font-weight: 600;
+  color: #235ba5;
+  text-align: center;
+  margin-top: 10px;
+}
+
+/* Recognition Confidence */
+
+#confidenceText {
+  color: #687586;
+  font-size: 14px;
+  text-align: center;
+  margin-top: 10px;
+}
+
+/* Demo Recognition Controls */
+
+.demo-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.demo-controls label {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.demo-controls select {
+  width: 100%;
+  padding: 11px;
+
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+
+  font-size: 15px;
+  color: #243247;
+  background: white;
+}
+
+.demo-controls button {
+  width: 100%;
+}
+
+/* Demo Information */
+
+.demo-note {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #687586;
+  margin-top: 14px;
+}
+
+/* Transcript Preview */
 
 #transcript {
   overflow-wrap: anywhere;
+  font-size: 17px;
+  min-height: 24px;
 }
+
+/* General Note */
 
 .note {
   color: #687586;
   font-size: 14px;
+  line-height: 1.5;
 }
+
+/* Footer */
 
 footer {
   text-align: center;
   padding: 20px;
   color: #687586;
+  font-size: 13px;
 }
 
+/* Responsive Layout */
+
 @media (max-width: 760px) {
+
   .container {
     grid-template-columns: 1fr;
+    margin: 20px auto;
+  }
+
+  .camera-section,
+  .translation-section {
+    padding: 18px;
   }
 
   .camera-controls {
     flex-wrap: wrap;
+  }
+
+  .header h1 {
+    font-size: 27px;
+  }
+
+  .section-heading {
+    flex-wrap: wrap;
+  }
+
+  #detectedLetter {
+    font-size: 42px;
+  }
+}
+
+@media (max-width: 420px) {
+
+  .camera-controls {
+    flex-direction: column;
+  }
+
+  .camera-controls button {
+    width: 100%;
+  }
+
+  .container {
+    padding: 0 12px;
   }
 }
