@@ -2,16 +2,16 @@
 // ASL Translator - Group 08
 // The Thinkers
 // F-01: Camera Access
-// F-02: Recognition Results Interface
+// F-02: Recognition Results
+// F-03: Translation Transcript
 
-// --------------------------------------
+// ----------------------------------
 // HTML Elements
-// --------------------------------------
+// ----------------------------------
 
 const camera = document.getElementById("camera");
 const startButton = document.getElementById("startCamera");
 const stopButton = document.getElementById("stopCamera");
-
 const cameraStatus = document.getElementById("cameraStatus");
 const cameraPlaceholder = document.getElementById("cameraPlaceholder");
 const errorMessage = document.getElementById("errorMessage");
@@ -19,65 +19,140 @@ const errorMessage = document.getElementById("errorMessage");
 const detectedLetter = document.getElementById("detectedLetter");
 const recognitionStatus = document.getElementById("recognitionStatus");
 const confidenceText = document.getElementById("confidenceText");
-
 const demoLetter = document.getElementById("demoLetter");
 const testRecognition = document.getElementById("testRecognition");
 
-// --------------------------------------
+const transcriptDisplay = document.getElementById("transcript");
+const transcriptStatus = document.getElementById("transcriptStatus");
+
+const addLetterButton = document.getElementById("addLetter");
+const addSpaceButton = document.getElementById("addSpace");
+const deleteLastButton = document.getElementById("deleteLast");
+const clearTextButton = document.getElementById("clearText");
+const resetSessionButton = document.getElementById("resetSession");
+
+// ----------------------------------
 // Application State
-// --------------------------------------
+// ----------------------------------
 
 let cameraStream = null;
 let isStarting = false;
+let transcript = "";
+let currentLetter = "";
 
-// --------------------------------------
-// Camera Status
-// --------------------------------------
+// ----------------------------------
+// Camera and Recognition Status
+// ----------------------------------
 
 function updateCameraStatus(message) {
   cameraStatus.textContent = message;
 }
 
-// --------------------------------------
-// Reset Recognition Results
-// --------------------------------------
-
 function resetRecognition() {
+  currentLetter = "";
   detectedLetter.textContent = "—";
-
-  confidenceText.textContent =
-    "Recognition confidence: —";
+  confidenceText.textContent = "Recognition confidence: —";
+  recognitionStatus.textContent = "Waiting for camera";
 
   demoLetter.value = "";
   testRecognition.disabled = true;
 
-  recognitionStatus.textContent =
-    "Waiting for camera";
+  updateTranscriptControls();
 }
-
-// --------------------------------------
-// Enable Recognition Demo Controls
-// --------------------------------------
 
 function updateRecognitionControls() {
   const cameraActive = cameraStream !== null;
 
-  const letterSelected = demoLetter.value !== "";
-
   testRecognition.disabled =
-    !cameraActive || !letterSelected;
+    !cameraActive || demoLetter.value === "";
 }
 
-// --------------------------------------
+// ----------------------------------
+// Transcript Display and Buttons
+// ----------------------------------
+
+function updateTranscriptDisplay() {
+  transcriptDisplay.textContent =
+    transcript.length > 0 ? transcript : "No translation yet";
+
+  updateTranscriptControls();
+}
+
+function updateTranscriptControls() {
+  addLetterButton.disabled = currentLetter === "";
+
+  addSpaceButton.disabled =
+    transcript.length === 0 || transcript.endsWith(" ");
+
+  deleteLastButton.disabled = transcript.length === 0;
+  clearTextButton.disabled = transcript.length === 0;
+}
+
+function addLetterToTranscript() {
+  if (!currentLetter) {
+    transcriptStatus.textContent =
+      "Select and test a letter first.";
+    return;
+  }
+
+  transcript += currentLetter;
+  updateTranscriptDisplay();
+
+  transcriptStatus.textContent =
+    `Added ${currentLetter} to transcript`;
+}
+
+function addSpaceToTranscript() {
+  if (transcript.length === 0 || transcript.endsWith(" ")) {
+    return;
+  }
+
+  transcript += " ";
+  updateTranscriptDisplay();
+
+  transcriptStatus.textContent = "Space added";
+}
+
+function deleteLastCharacter() {
+  if (transcript.length === 0) {
+    return;
+  }
+
+  transcript = transcript.slice(0, -1);
+  updateTranscriptDisplay();
+
+  transcriptStatus.textContent =
+    "Last character removed";
+}
+
+function clearTranscript() {
+  transcript = "";
+  updateTranscriptDisplay();
+
+  transcriptStatus.textContent = "Transcript cleared";
+}
+
+function resetSession() {
+  transcript = "";
+  resetRecognition();
+  updateTranscriptDisplay();
+
+  recognitionStatus.textContent = cameraStream
+    ? "Camera ready - select a demo letter"
+    : "Waiting for camera";
+
+  transcriptStatus.textContent =
+    "Session reset. You can start a new translation.";
+}
+
+// ----------------------------------
 // Display Recognition Result
-// --------------------------------------
+// ----------------------------------
 
 function displayRecognitionResult(letter, confidence = null) {
-
   if (!cameraStream) {
     recognitionStatus.textContent =
       "Please start the camera first";
-
     return;
   }
 
@@ -86,18 +161,15 @@ function displayRecognitionResult(letter, confidence = null) {
     /^[A-Z]$/.test(letter);
 
   if (!validLetter) {
-
+    currentLetter = "";
     detectedLetter.textContent = "—";
-
-    recognitionStatus.textContent =
-      "No valid letter detected";
-
-    confidenceText.textContent =
-      "Recognition confidence: —";
-
+    recognitionStatus.textContent = "No valid letter detected";
+    confidenceText.textContent = "Recognition confidence: —";
+    updateTranscriptControls();
     return;
   }
 
+  currentLetter = letter;
   detectedLetter.textContent = letter;
 
   recognitionStatus.textContent =
@@ -109,28 +181,22 @@ function displayRecognitionResult(letter, confidence = null) {
     confidence >= 0 &&
     confidence <= 1
   ) {
-
-    const percentage = Math.round(confidence * 100);
-
     confidenceText.textContent =
-      `Recognition confidence: ${percentage}%`;
-
+      `Recognition confidence: ${Math.round(confidence * 100)}%`;
   } else {
-
     confidenceText.textContent =
       "Recognition confidence: Not available";
-
   }
+
+  updateTranscriptControls();
 }
 
-// --------------------------------------
+// ----------------------------------
 // Stop Camera
-// --------------------------------------
+// ----------------------------------
 
 function stopCamera() {
-
   if (cameraStream) {
-
     cameraStream.getTracks().forEach(track => {
       track.onended = null;
       track.stop();
@@ -140,45 +206,37 @@ function stopCamera() {
   }
 
   camera.srcObject = null;
-
   cameraPlaceholder.style.display = "block";
 
   startButton.disabled = false;
   stopButton.disabled = true;
 
   updateCameraStatus("Camera Off");
-
   resetRecognition();
+
+  // Preserve text when the camera is stopped.
+  // The transcript is cleared only by the user.
 }
 
-// --------------------------------------
+// ----------------------------------
 // Start Camera
-// --------------------------------------
+// ----------------------------------
 
 startButton.addEventListener("click", async () => {
-
   if (cameraStream || isStarting) {
     return;
   }
 
   isStarting = true;
-
   startButton.disabled = true;
-
   errorMessage.textContent = "";
 
   updateCameraStatus("Starting Camera...");
-
-  recognitionStatus.textContent =
-    "Waiting for camera access";
+  recognitionStatus.textContent = "Waiting for camera access";
 
   try {
-
     if (!navigator.mediaDevices?.getUserMedia) {
-
-      throw new Error(
-        "Camera access is not supported in this context."
-      );
+      throw new Error("Camera API unavailable");
     }
 
     const stream =
@@ -188,134 +246,126 @@ startButton.addEventListener("click", async () => {
       });
 
     cameraStream = stream;
-
     camera.srcObject = stream;
 
     await camera.play();
 
-    // Handle camera disconnection or browser interruption.
     const videoTrack = stream.getVideoTracks()[0];
 
     if (videoTrack) {
-
       videoTrack.onended = () => {
-
         stopCamera();
-
         errorMessage.textContent =
           "Camera connection ended. Please try again.";
       };
     }
 
     cameraPlaceholder.style.display = "none";
-
     startButton.disabled = true;
     stopButton.disabled = false;
 
     updateCameraStatus("Camera Active");
-
     recognitionStatus.textContent =
       "Camera ready - select a demo letter";
 
     updateRecognitionControls();
-
   } catch (error) {
-
     console.error("Camera error:", error);
-
     stopCamera();
 
     updateCameraStatus("Camera Error");
 
     if (error.name === "NotAllowedError") {
-
       errorMessage.textContent =
-        "Camera permission denied. Please allow camera access in your browser settings.";
-
+        "Camera permission denied. Allow access in browser settings.";
     } else if (error.name === "NotFoundError") {
-
       errorMessage.textContent =
-        "No webcam was detected on this device.";
-
+        "No webcam was detected.";
     } else if (error.name === "NotReadableError") {
-
       errorMessage.textContent =
-        "The webcam is already in use or cannot be accessed.";
-
+        "Webcam is already in use or unavailable.";
     } else {
-
       errorMessage.textContent =
-        "Unable to start the camera. Check your connection and browser permissions.";
+        "Unable to start the camera. Please try again.";
     }
 
-    recognitionStatus.textContent =
-      "Camera unavailable";
-
+    recognitionStatus.textContent = "Camera unavailable";
   } finally {
-
     isStarting = false;
   }
 });
 
-// --------------------------------------
+// ----------------------------------
 // Stop Camera Button
-// --------------------------------------
+// ----------------------------------
 
 stopButton.addEventListener("click", () => {
-
   stopCamera();
-
   errorMessage.textContent = "";
 });
 
-// --------------------------------------
-// Demo Letter Dropdown
-// --------------------------------------
+// ----------------------------------
+// Simulated Recognition Controls
+// ----------------------------------
 
 demoLetter.addEventListener("change", () => {
+  // A selection must be tested before it can be added.
+  currentLetter = "";
+  detectedLetter.textContent = "—";
+  confidenceText.textContent = "Recognition confidence: —";
+
+  recognitionStatus.textContent = cameraStream
+    ? "Click Test Result to display this letter"
+    : "Start camera first";
 
   updateRecognitionControls();
+  updateTranscriptControls();
 });
-
-// --------------------------------------
-// Demo Recognition Button
-// --------------------------------------
 
 testRecognition.addEventListener("click", () => {
-
-  const selectedLetter = demoLetter.value;
-
-  if (!selectedLetter) {
-
-    recognitionStatus.textContent =
-      "Please select a letter";
-
-    return;
-  }
-
   if (!cameraStream) {
-
-    recognitionStatus.textContent =
-      "Please start the camera first";
-
+    recognitionStatus.textContent = "Start camera first";
     return;
   }
 
-  // Simulated result for frontend testing.
-  // Replace this input with the backend result
-  // when ASL recognition integration is ready.
-
-  displayRecognitionResult(selectedLetter);
+  displayRecognitionResult(demoLetter.value);
 });
 
-// --------------------------------------
-// Clean Up Camera On Page Exit
-// --------------------------------------
+// ----------------------------------
+// Transcript Button Events
+// ----------------------------------
+
+addLetterButton.addEventListener(
+  "click",
+  addLetterToTranscript
+);
+
+addSpaceButton.addEventListener(
+  "click",
+  addSpaceToTranscript
+);
+
+deleteLastButton.addEventListener(
+  "click",
+  deleteLastCharacter
+);
+
+clearTextButton.addEventListener(
+  "click",
+  clearTranscript
+);
+
+resetSessionButton.addEventListener(
+  "click",
+  resetSession
+);
+
+// ----------------------------------
+// Stop Camera When Page Closes
+// ----------------------------------
 
 window.addEventListener("pagehide", () => {
-
   if (cameraStream) {
-
     cameraStream.getTracks().forEach(track => {
       track.onended = null;
       track.stop();
@@ -325,13 +375,13 @@ window.addEventListener("pagehide", () => {
   }
 });
 
-// --------------------------------------
-// Initial Page State
-// --------------------------------------
+// ----------------------------------
+// Initialize Application
+// ----------------------------------
 
 resetRecognition();
-
 updateCameraStatus("Camera Off");
+updateTranscriptDisplay();
 
 startButton.disabled = false;
 stopButton.disabled = true;
