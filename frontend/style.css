@@ -1,8 +1,8 @@
 
 /* ASL Translator - Group 08 */
-/* The Thinkers - Frontend Styles */
+/* The Thinkers */
 
-/* General Page Styling */
+/* General Layout */
 
 * {
   box-sizing: border-box;
@@ -10,10 +10,10 @@
 
 body {
   margin: 0;
+  min-height: 100vh;
   font-family: Arial, sans-serif;
   background: #f4f6fa;
   color: #243247;
-  min-height: 100vh;
 }
 
 /* Header */
@@ -36,20 +36,19 @@ body {
   font-size: 15px;
 }
 
-/* Main Layout */
+/* Main Container */
 
 .container {
   max-width: 1100px;
   margin: 35px auto;
   padding: 0 20px;
-
   display: grid;
   grid-template-columns: 1.4fr 1fr;
-  gap: 25px;
   align-items: start;
+  gap: 25px;
 }
 
-/* Main Panels */
+/* Main Sections */
 
 .camera-section,
 .translation-section {
@@ -64,12 +63,12 @@ body {
   font-size: 22px;
 }
 
-/* Camera Header */
+/* Camera Heading */
 
 .section-heading {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
   gap: 12px;
 }
 
@@ -87,16 +86,14 @@ body {
   white-space: nowrap;
 }
 
-/* Camera Display */
+/* Live Camera */
 
 .camera-box {
   position: relative;
   background: #111827;
   border-radius: 10px;
   overflow: hidden;
-
   aspect-ratio: 4 / 3;
-
   display: flex;
   align-items: center;
   justify-content: center;
@@ -117,7 +114,7 @@ body {
   pointer-events: none;
 }
 
-/* Camera Buttons */
+/* Camera Controls */
 
 .camera-controls {
   display: flex;
@@ -126,19 +123,16 @@ body {
   flex-wrap: wrap;
 }
 
-/* All Buttons */
+/* General Buttons */
 
 button {
   padding: 12px 20px;
   border: none;
   border-radius: 7px;
-
   background: #235ba5;
   color: white;
-
   font-size: 14px;
   font-weight: 500;
-
   cursor: pointer;
   transition: background 0.2s ease;
 }
@@ -158,7 +152,7 @@ select:focus-visible {
   outline-offset: 2px;
 }
 
-/* Camera Error Messages */
+/* Error Messages */
 
 #errorMessage {
   color: #b42318;
@@ -170,7 +164,7 @@ select:focus-visible {
   display: none;
 }
 
-/* Translation Boxes */
+/* Recognition and Transcript Boxes */
 
 .result-box,
 .transcript-box {
@@ -198,26 +192,22 @@ select:focus-visible {
   color: #17365d;
 }
 
-/* Recognition Status */
+/* Recognition Messages */
 
 #recognitionStatus {
   font-size: 14px;
   font-weight: 600;
   color: #235ba5;
   text-align: center;
-  margin-top: 10px;
 }
-
-/* Recognition Confidence */
 
 #confidenceText {
   color: #687586;
   font-size: 14px;
   text-align: center;
-  margin-top: 10px;
 }
 
-/* Demo Recognition Controls */
+/* Recognition Demo Controls */
 
 .demo-controls {
   display: flex;
@@ -234,10 +224,8 @@ select:focus-visible {
 .demo-controls select {
   width: 100%;
   padding: 11px;
-
   border: 1px solid #cbd5e1;
   border-radius: 7px;
-
   font-size: 15px;
   color: #243247;
   background: white;
@@ -247,24 +235,60 @@ select:focus-visible {
   width: 100%;
 }
 
-/* Demo Information */
-
 .demo-note {
   font-size: 12px;
-  line-height: 1.5;
   color: #687586;
+  line-height: 1.5;
   margin-top: 14px;
 }
 
-/* Transcript Preview */
+/* F-03 Transcript */
 
 #transcript {
+  background: white;
+  border: 1px solid #dce3eb;
+  border-radius: 7px;
+  padding: 16px;
+  min-height: 75px;
+  font-size: 18px;
+  line-height: 1.6;
   overflow-wrap: anywhere;
-  font-size: 17px;
-  min-height: 24px;
+  white-space: pre-wrap;
 }
 
-/* General Note */
+/* Transcript Buttons */
+
+.transcript-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.transcript-controls button {
+  width: 100%;
+  padding: 12px 8px;
+}
+
+#resetSession {
+  grid-column: 1 / -1;
+  background: #374151;
+}
+
+#resetSession:hover:not(:disabled) {
+  background: #1f2937;
+}
+
+/* Transcript Status */
+
+#transcriptStatus {
+  margin-top: 14px;
+  color: #687586;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* General Information */
 
 .note {
   color: #687586;
@@ -281,10 +305,9 @@ footer {
   font-size: 13px;
 }
 
-/* Responsive Layout */
+/* Tablet and Mobile */
 
 @media (max-width: 760px) {
-
   .container {
     grid-template-columns: 1fr;
     margin: 20px auto;
@@ -299,12 +322,12 @@ footer {
     flex-wrap: wrap;
   }
 
-  .header h1 {
-    font-size: 27px;
-  }
-
   .section-heading {
     flex-wrap: wrap;
+  }
+
+  .header h1 {
+    font-size: 27px;
   }
 
   #detectedLetter {
@@ -313,6 +336,9 @@ footer {
 }
 
 @media (max-width: 420px) {
+  .container {
+    padding: 0 12px;
+  }
 
   .camera-controls {
     flex-direction: column;
@@ -322,7 +348,11 @@ footer {
     width: 100%;
   }
 
-  .container {
-    padding: 0 12px;
+  .transcript-controls {
+    grid-template-columns: 1fr;
+  }
+
+  #resetSession {
+    grid-column: auto;
   }
 }
