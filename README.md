@@ -24,21 +24,21 @@ Models has to be trained on the rest of the letters.
 1. Clone the repository
    `git clone https://github.com/g-allu/Group08_CSCE3444-FA26.git`
 
-2. Enter the folder and Create a **virtual environment** in your respective operating system
+2. Enter the folder and create a **virtual environment named `.venv`** using Python 3.12 or newer.
 
-3. Run the following commands after setting up venv:
+3. Run the following commands from the project folder. They use `.venv` directly, so activation is not required:
 
 ### macOS / Linux
 
 ```bash
-python -m pip install -r requirements.txt
+.venv/bin/python -m pip install -r requirements.txt
 .venv/bin/python run.py --port 5001
 ```
 
 ### Windows (PowerShell or Command Prompt)
 
 ```powershell
-python -m pip install -r requirements.txt
+.venv\Scripts\python.exe -m pip install -r requirements.txt
 .venv\Scripts\python.exe run.py --port 5001
 ```
 
