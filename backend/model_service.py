@@ -24,9 +24,9 @@ class ModelService:
             self.extractor = HandExtractor()
         except Exception as error:
             self.error = (
-                f"Model unavailable: {error}. Run scripts/setup.py with Python 3.12 "
-                "to install requirements.txt and prepare model assets. "
-                "Restart Flask after preparing compatible assets."
+                f"Model unavailable: {error}. Install requirements.txt in your virtual environment "
+                "and make sure the bundled model assets are present. "
+                "Restart Flask after restoring compatible assets."
             )
             logging.getLogger(__name__).warning(self.error)
 
