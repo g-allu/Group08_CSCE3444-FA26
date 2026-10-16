@@ -1,0 +1,11 @@
+mediapipe
+certifi
+scikit-learn
+scipy
+opencv-contrib-python
+numpy
+Pillow
+pyarrow
+joblib
+matplotlib
+pytest

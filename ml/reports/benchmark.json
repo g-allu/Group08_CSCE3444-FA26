@@ -1,0 +1,16 @@
+{
+  "samples": 100,
+  "median_ms": 13.791603999834479,
+  "p95_ms": 18.845445199895035,
+  "statuses": {
+    "recognized": 15,
+    "uncertain": 57,
+    "no_hand": 28
+  },
+  "platform": "Darwin",
+  "architecture": "arm64",
+  "python": "3.12.14",
+  "excludes_model_startup": true,
+  "model_sha256": "c795e5de256b476c5e71f1a78c3e4040949e0be9414a5651b805b9ec664eedf4",
+  "latency_target_passed": true
+}

@@ -1,0 +1,120 @@
+{
+  "samples": 1004,
+  "supported_samples": 210,
+  "accepted_predictions": 145,
+  "accepted_letter_precision": 0.9310344827586207,
+  "supported_recall": 0.6428571428571429,
+  "unsupported_rejection_rate": 0.9874055415617129,
+  "macro_f1_supported": 0.7518673410215697,
+  "per_letter": {
+    "A": {
+      "precision": 1.0,
+      "recall": 0.8095238095238095,
+      "f1-score": 0.8947368421052632,
+      "support": 42.0
+    },
+    "B": {
+      "precision": 0.9354838709677419,
+      "recall": 0.6904761904761905,
+      "f1-score": 0.7945205479452054,
+      "support": 42.0
+    },
+    "C": {
+      "precision": 0.8421052631578947,
+      "recall": 0.38095238095238093,
+      "f1-score": 0.5245901639344263,
+      "support": 42.0
+    },
+    "L": {
+      "precision": 0.9655172413793104,
+      "recall": 0.6666666666666666,
+      "f1-score": 0.7887323943661971,
+      "support": 42.0
+    },
+    "Y": {
+      "precision": 0.875,
+      "recall": 0.6666666666666666,
+      "f1-score": 0.7567567567567568,
+      "support": 42.0
+    }
+  },
+  "acceptance_passed": false,
+  "threshold": 0.65,
+  "model_sha256": "c795e5de256b476c5e71f1a78c3e4040949e0be9414a5651b805b9ec664eedf4",
+  "feature_cache_sha256": "4b89a7d8273b129a612e39ad8ca9977ec3eac3518d17f26412239f9f638c3e50",
+  "split_manifest_sha256": "6d192415f124fd5bc46843dae7b87cde180c4f813190ed7e2ff6f2687fbd6244",
+  "detection_statuses": {
+    "ok": 762,
+    "no_hand": 242
+  },
+  "webcam_validation": "not_performed",
+  "signer_independent": false,
+  "source_letter_counts": {
+    "A": 42,
+    "B": 42,
+    "C": 42,
+    "D": 42,
+    "E": 42,
+    "F": 42,
+    "G": 42,
+    "H": 42,
+    "I": 42,
+    "K": 42,
+    "L": 42,
+    "M": 42,
+    "N": 42,
+    "O": 42,
+    "P": 42,
+    "Q": 38,
+    "R": 42,
+    "S": 42,
+    "T": 42,
+    "U": 42,
+    "V": 42,
+    "W": 42,
+    "X": 42,
+    "Y": 42
+  },
+  "detected_hands_only": {
+    "samples": 762,
+    "supported_samples": 173,
+    "accepted_predictions": 145,
+    "accepted_letter_precision": 0.9310344827586207,
+    "supported_recall": 0.7803468208092486,
+    "unsupported_rejection_rate": 0.9830220713073005,
+    "macro_f1_supported": 0.8381436657361382,
+    "per_letter": {
+      "A": {
+        "precision": 1.0,
+        "recall": 0.85,
+        "f1-score": 0.918918918918919,
+        "support": 40.0
+      },
+      "B": {
+        "precision": 0.9354838709677419,
+        "recall": 0.8285714285714286,
+        "f1-score": 0.8787878787878788,
+        "support": 35.0
+      },
+      "C": {
+        "precision": 0.8421052631578947,
+        "recall": 0.5925925925925926,
+        "f1-score": 0.6956521739130435,
+        "support": 27.0
+      },
+      "L": {
+        "precision": 0.9655172413793104,
+        "recall": 0.7777777777777778,
+        "f1-score": 0.8615384615384616,
+        "support": 36.0
+      },
+      "Y": {
+        "precision": 0.875,
+        "recall": 0.8,
+        "f1-score": 0.835820895522388,
+        "support": 35.0
+      }
+    },
+    "acceptance_passed": false
+  }
+}
