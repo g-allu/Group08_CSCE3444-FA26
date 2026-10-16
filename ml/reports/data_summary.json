@@ -1,0 +1,133 @@
+{
+  "images": 10033,
+  "statuses": {
+    "ok": 7763,
+    "no_hand": 2265,
+    "multiple_hands": 5
+  },
+  "by_source_letter": {
+    "A": {
+      "ok": 351,
+      "no_hand": 69
+    },
+    "B": {
+      "ok": 336,
+      "no_hand": 82
+    },
+    "C": {
+      "ok": 319,
+      "no_hand": 101
+    },
+    "D": {
+      "ok": 318,
+      "no_hand": 101,
+      "multiple_hands": 1
+    },
+    "E": {
+      "ok": 332,
+      "no_hand": 87,
+      "multiple_hands": 1
+    },
+    "F": {
+      "ok": 333,
+      "no_hand": 87
+    },
+    "G": {
+      "ok": 322,
+      "no_hand": 98
+    },
+    "H": {
+      "ok": 329,
+      "no_hand": 90
+    },
+    "I": {
+      "ok": 310,
+      "no_hand": 110
+    },
+    "K": {
+      "ok": 335,
+      "no_hand": 84,
+      "multiple_hands": 1
+    },
+    "L": {
+      "ok": 353,
+      "no_hand": 67
+    },
+    "M": {
+      "ok": 341,
+      "no_hand": 79
+    },
+    "N": {
+      "ok": 331,
+      "no_hand": 86
+    },
+    "O": {
+      "ok": 277,
+      "no_hand": 143
+    },
+    "P": {
+      "ok": 314,
+      "no_hand": 105
+    },
+    "Q": {
+      "ok": 250,
+      "no_hand": 129,
+      "multiple_hands": 1
+    },
+    "R": {
+      "ok": 313,
+      "no_hand": 107
+    },
+    "S": {
+      "ok": 326,
+      "no_hand": 93,
+      "multiple_hands": 1
+    },
+    "T": {
+      "ok": 339,
+      "no_hand": 81
+    },
+    "U": {
+      "ok": 329,
+      "no_hand": 91
+    },
+    "V": {
+      "ok": 321,
+      "no_hand": 99
+    },
+    "W": {
+      "ok": 316,
+      "no_hand": 104
+    },
+    "X": {
+      "ok": 313,
+      "no_hand": 107
+    },
+    "Y": {
+      "ok": 355,
+      "no_hand": 65
+    }
+  },
+  "duplicate_groups": 10009,
+  "phash_max_distance": 4,
+  "extraction_seconds": 91.32,
+  "feature_version": "world-wrist-relative-middle-mcp-scale-v1",
+  "source": {
+    "dataset": "Marxulia/asl_sign_languages_alphabets_v03",
+    "revision": "1adf43b2d31eb9d7aea5855edaeac0231d8a2757",
+    "files": {
+      "dataset": {
+        "url": "https://huggingface.co/datasets/Marxulia/asl_sign_languages_alphabets_v03/resolve/1adf43b2d31eb9d7aea5855edaeac0231d8a2757/data/train-00000-of-00001.parquet",
+        "path": "data/raw/asl.parquet",
+        "bytes": 74234826,
+        "sha256": "a2211d863e15846bbad01bec5137c161262ae3eaf29ad8debd96490c15ebfcd6"
+      },
+      "landmarker": {
+        "url": "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+        "path": "data/models/hand_landmarker.task",
+        "bytes": 7819105,
+        "sha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1"
+      }
+    }
+  }
+}
