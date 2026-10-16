@@ -1,6 +1,6 @@
 
 import unittest
-from translator import Translator
+from backend.translator import Translator
 
 
 class TestTranslator(unittest.TestCase):

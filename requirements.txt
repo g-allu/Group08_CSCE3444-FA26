@@ -1,0 +1,3 @@
+# Complete local app and model environment; keep tested pins in each subsystem.
+-r backend/requirements.txt
+-r ml/requirements.txt

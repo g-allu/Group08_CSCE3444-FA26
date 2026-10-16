@@ -146,8 +146,7 @@ button:disabled {
   cursor: not-allowed;
 }
 
-button:focus-visible,
-select:focus-visible {
+button:focus-visible {
   outline: 3px solid #60a5fa;
   outline-offset: 2px;
 }
@@ -207,41 +206,6 @@ select:focus-visible {
   text-align: center;
 }
 
-/* Recognition Demo Controls */
-
-.demo-controls {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-top: 20px;
-}
-
-.demo-controls label {
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.demo-controls select {
-  width: 100%;
-  padding: 11px;
-  border: 1px solid #cbd5e1;
-  border-radius: 7px;
-  font-size: 15px;
-  color: #243247;
-  background: white;
-}
-
-.demo-controls button {
-  width: 100%;
-}
-
-.demo-note {
-  font-size: 12px;
-  color: #687586;
-  line-height: 1.5;
-  margin-top: 14px;
-}
-
 /* F-03 Transcript */
 
 #transcript {
@@ -268,15 +232,6 @@ select:focus-visible {
 .transcript-controls button {
   width: 100%;
   padding: 12px 8px;
-}
-
-#resetSession {
-  grid-column: 1 / -1;
-  background: #374151;
-}
-
-#resetSession:hover:not(:disabled) {
-  background: #1f2937;
 }
 
 /* Transcript Status */
@@ -350,9 +305,5 @@ footer {
 
   .transcript-controls {
     grid-template-columns: 1fr;
-  }
-
-  #resetSession {
-    grid-column: auto;
   }
 }

@@ -186,7 +186,10 @@ def test_module_entrypoint_supports_help_without_camera():
     assert "Run without arguments to start the webcam" in result.stdout
 
 
-@pytest.mark.skipif(not asl.MODEL.exists(), reason="Train the local model first")
+@pytest.mark.skipif(
+    not all(path.exists() for path in (asl.MODEL, asl.LANDMARKER, asl.FEATURES, asl.SPLITS)),
+    reason="Prepare local training features and splits first",
+)
 def test_saved_model_roundtrip_and_real_split_integrity(tmp_path):
     bundle = asl.load_model()
     data = asl.load_features()
@@ -208,7 +211,7 @@ def test_saved_model_roundtrip_and_real_split_integrity(tmp_path):
     np.testing.assert_array_equal(before[1], after[1])
 
 
-@pytest.mark.skipif(not asl.MODEL.exists(), reason="Train the local model first")
+@pytest.mark.skipif(not asl.MODEL.exists() or not asl.LANDMARKER.exists(), reason="Prepare model assets first")
 def test_real_pipeline_rejects_empty_image():
     with asl.HandExtractor() as extractor:
         result = asl.predict_image(Image.new("RGB", (640, 480)), extractor, asl.load_model())
@@ -216,7 +219,10 @@ def test_real_pipeline_rejects_empty_image():
     assert result["letter"] is None
 
 
-@pytest.mark.skipif(not asl.MODEL.exists(), reason="Train the local model first")
+@pytest.mark.skipif(
+    not all(path.exists() for path in (asl.MODEL, asl.LANDMARKER, asl.FEATURES, asl.SPLITS, asl.PARQUET)),
+    reason="Prepare local training data, features, and splits first",
+)
 def test_real_held_out_images_match_cached_feature_predictions():
     import pyarrow.parquet as pq
 

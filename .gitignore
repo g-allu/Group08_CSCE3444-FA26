@@ -3,7 +3,7 @@ AGENTS.md
 agents.md
 
 # Python environments and generated files
-.venv/
+/.venv/
 venv/
 __pycache__/
 *.py[cod]
@@ -22,9 +22,14 @@ dist/
 htmlcov/
 coverage.xml
 
-# Downloaded ML data and generated model artifacts
-/ml/data/
-/ml/artifacts/
+# Keep the shared inference assets; ignore datasets and other generated files.
+/ml/data/*
+!/ml/data/models/
+/ml/data/models/*
+!/ml/data/models/hand_landmarker.task
+/ml/artifacts/*
+!/ml/artifacts/asl_five_letters.joblib
+!/ml/artifacts/model_metadata.json
 /ml/reports/local/
 
 # Local configuration; keep shareable examples

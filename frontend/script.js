@@ -1,387 +1,253 @@
-
 // ASL Translator - Group 08
-// The Thinkers
-// F-01: Camera Access
-// F-02: Recognition Results
-// F-03: Translation Transcript
-
-// ----------------------------------
-// HTML Elements
-// ----------------------------------
-
 const camera = document.getElementById("camera");
 const startButton = document.getElementById("startCamera");
 const stopButton = document.getElementById("stopCamera");
 const cameraStatus = document.getElementById("cameraStatus");
 const cameraPlaceholder = document.getElementById("cameraPlaceholder");
 const errorMessage = document.getElementById("errorMessage");
-
+const modelStatus = document.getElementById("modelStatus");
 const detectedLetter = document.getElementById("detectedLetter");
 const recognitionStatus = document.getElementById("recognitionStatus");
 const confidenceText = document.getElementById("confidenceText");
-const demoLetter = document.getElementById("demoLetter");
-const testRecognition = document.getElementById("testRecognition");
-
 const transcriptDisplay = document.getElementById("transcript");
 const transcriptStatus = document.getElementById("transcriptStatus");
-
 const addLetterButton = document.getElementById("addLetter");
-const addSpaceButton = document.getElementById("addSpace");
-const deleteLastButton = document.getElementById("deleteLast");
 const clearTextButton = document.getElementById("clearText");
-const resetSessionButton = document.getElementById("resetSession");
-
-// ----------------------------------
-// Application State
-// ----------------------------------
+const canvas = document.createElement("canvas");
+const context = canvas.getContext("2d");
+const supportedLetters = new Set(["A", "B", "C", "L", "Y"]);
 
 let cameraStream = null;
 let isStarting = false;
 let transcript = "";
 let currentLetter = "";
+let previousLetter = "";
+let consecutivePredictions = 0;
+let generation = 0;
+let recognitionTimer = null;
+let activeRequest = null;
 
-// ----------------------------------
-// Camera and Recognition Status
-// ----------------------------------
-
-function updateCameraStatus(message) {
-  cameraStatus.textContent = message;
-}
-
-function resetRecognition() {
-  currentLetter = "";
-  detectedLetter.textContent = "—";
-  confidenceText.textContent = "Recognition confidence: —";
-  recognitionStatus.textContent = "Waiting for camera";
-
-  demoLetter.value = "";
-  testRecognition.disabled = true;
-
-  updateTranscriptControls();
-}
-
-function updateRecognitionControls() {
-  const cameraActive = cameraStream !== null;
-
-  testRecognition.disabled =
-    !cameraActive || demoLetter.value === "";
-}
-
-// ----------------------------------
-// Transcript Display and Buttons
-// ----------------------------------
-
-function updateTranscriptDisplay() {
-  transcriptDisplay.textContent =
-    transcript.length > 0 ? transcript : "No translation yet";
-
-  updateTranscriptControls();
-}
-
-function updateTranscriptControls() {
+function updateTranscript() {
+  transcriptDisplay.textContent = transcript || "No translation yet";
   addLetterButton.disabled = currentLetter === "";
-
-  addSpaceButton.disabled =
-    transcript.length === 0 || transcript.endsWith(" ");
-
-  deleteLastButton.disabled = transcript.length === 0;
   clearTextButton.disabled = transcript.length === 0;
 }
 
-function addLetterToTranscript() {
-  if (!currentLetter) {
-    transcriptStatus.textContent =
-      "Select and test a letter first.";
+function resetRecognition(message = "Waiting for camera") {
+  currentLetter = "";
+  previousLetter = "";
+  consecutivePredictions = 0;
+  detectedLetter.textContent = "—";
+  confidenceText.textContent = "Recognition confidence: —";
+  recognitionStatus.textContent = message;
+  updateTranscript();
+}
+
+function displayRecognitionResult(result) {
+  const messages = {
+    no_hand: "Show one hand to the camera",
+    multiple_hands: "Please show only one hand",
+    invalid_landmarks: "Hand unclear. Adjust your position",
+    uncertain: "Sign uncertain. Hold A, B, C, L, or Y clearly"
+  };
+  const validConfidence = typeof result.confidence === "number" &&
+    Number.isFinite(result.confidence) && result.confidence >= 0 && result.confidence <= 1;
+  if (result.status !== "recognized" || !supportedLetters.has(result.letter) || !validConfidence) {
+    resetRecognition(messages[result.status] || "No valid letter detected");
     return;
   }
 
-  transcript += currentLetter;
-  updateTranscriptDisplay();
-
-  transcriptStatus.textContent =
-    `Added ${currentLetter} to transcript`;
+  consecutivePredictions = result.letter === previousLetter ? consecutivePredictions + 1 : 1;
+  previousLetter = result.letter;
+  currentLetter = consecutivePredictions >= 2 ? result.letter : "";
+  detectedLetter.textContent = currentLetter || "—";
+  confidenceText.textContent = `Recognition confidence: ${Math.round(result.confidence * 100)}%`;
+  recognitionStatus.textContent = currentLetter ? "Letter ready. Click Add Letter" : "Hold the sign steady";
+  updateTranscript();
 }
 
-function addSpaceToTranscript() {
-  if (transcript.length === 0 || transcript.endsWith(" ")) {
+async function checkModel() {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
+  try {
+    const response = await fetch("/api/health", { signal: controller.signal, cache: "no-store" });
+    const result = await response.json();
+    if (!response.ok || !result.ready) {
+      throw new Error(result.error || "Model unavailable. Prepare model assets and restart Flask.");
+    }
+    modelStatus.textContent = "Model ready · A, B, C, L, Y";
+  } catch (error) {
+    modelStatus.textContent = error.name === "AbortError"
+      ? "Model check timed out. Start the camera to retry."
+      : error.message;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function recognizeFrame(session) {
+  if (session !== generation || !cameraStream) {
     return;
   }
-
-  transcript += " ";
-  updateTranscriptDisplay();
-
-  transcriptStatus.textContent = "Space added";
-}
-
-function deleteLastCharacter() {
-  if (transcript.length === 0) {
-    return;
+  const started = performance.now();
+  let retryDelay = 0;
+  let timeout = null;
+  let controller = null;
+  try {
+    if (!camera.videoWidth || !camera.videoHeight || camera.readyState < 2) {
+      recognitionTimer = setTimeout(() => recognizeFrame(session), 200);
+      return;
+    }
+    const scale = Math.min(1, 640 / Math.max(camera.videoWidth, camera.videoHeight));
+    canvas.width = Math.max(1, Math.round(camera.videoWidth * scale));
+    canvas.height = Math.max(1, Math.round(camera.videoHeight * scale));
+    // Capture original pixels; CSS preview mirroring must never affect inference.
+    context.drawImage(camera, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/jpeg", 0.85));
+    if (session !== generation || !cameraStream) {
+      return;
+    }
+    if (!blob) {
+      throw new Error("Unable to capture a camera frame. Please try again.");
+    }
+    const form = new FormData();
+    form.append("file", blob, "frame.jpg");
+    controller = new AbortController();
+    activeRequest = controller;
+    timeout = setTimeout(() => controller.abort(), 5000);
+    const response = await fetch("/api/predict", { method: "POST", body: form, signal: controller.signal });
+    const result = await response.json();
+    if (session !== generation || !cameraStream) {
+      return;
+    }
+    if (!response.ok) {
+      throw new Error(result.error || "Recognition service unavailable. Retrying…");
+    }
+    errorMessage.textContent = "";
+    modelStatus.textContent = "Model ready · A, B, C, L, Y";
+    displayRecognitionResult(result);
+  } catch (error) {
+    if (session !== generation || !cameraStream) {
+      return;
+    }
+    resetRecognition("Recognition unavailable. Retrying…");
+    modelStatus.textContent = "Recognition service unavailable";
+    errorMessage.textContent = error.name === "AbortError"
+      ? "Recognition timed out. Retrying…"
+      : error instanceof TypeError ? "Unable to reach the backend. Retrying…" : error.message;
+    retryDelay = 2000;
+  } finally {
+    clearTimeout(timeout);
+    if (activeRequest === controller) {
+      activeRequest = null;
+    }
   }
-
-  transcript = transcript.slice(0, -1);
-  updateTranscriptDisplay();
-
-  transcriptStatus.textContent =
-    "Last character removed";
-}
-
-function clearTranscript() {
-  transcript = "";
-  updateTranscriptDisplay();
-
-  transcriptStatus.textContent = "Transcript cleared";
-}
-
-function resetSession() {
-  transcript = "";
-  resetRecognition();
-  updateTranscriptDisplay();
-
-  recognitionStatus.textContent = cameraStream
-    ? "Camera ready - select a demo letter"
-    : "Waiting for camera";
-
-  transcriptStatus.textContent =
-    "Session reset. You can start a new translation.";
-}
-
-// ----------------------------------
-// Display Recognition Result
-// ----------------------------------
-
-function displayRecognitionResult(letter, confidence = null) {
-  if (!cameraStream) {
-    recognitionStatus.textContent =
-      "Please start the camera first";
-    return;
+  if (session === generation && cameraStream) {
+    recognitionTimer = setTimeout(() => recognizeFrame(session),
+      retryDelay || Math.max(0, 200 - (performance.now() - started)));
   }
-
-  const validLetter =
-    typeof letter === "string" &&
-    /^[A-Z]$/.test(letter);
-
-  if (!validLetter) {
-    currentLetter = "";
-    detectedLetter.textContent = "—";
-    recognitionStatus.textContent = "No valid letter detected";
-    confidenceText.textContent = "Recognition confidence: —";
-    updateTranscriptControls();
-    return;
-  }
-
-  currentLetter = letter;
-  detectedLetter.textContent = letter;
-
-  recognitionStatus.textContent =
-    "Simulated recognition result received";
-
-  if (
-    typeof confidence === "number" &&
-    Number.isFinite(confidence) &&
-    confidence >= 0 &&
-    confidence <= 1
-  ) {
-    confidenceText.textContent =
-      `Recognition confidence: ${Math.round(confidence * 100)}%`;
-  } else {
-    confidenceText.textContent =
-      "Recognition confidence: Not available";
-  }
-
-  updateTranscriptControls();
 }
-
-// ----------------------------------
-// Stop Camera
-// ----------------------------------
 
 function stopCamera() {
+  generation += 1;
+  clearTimeout(recognitionTimer);
+  recognitionTimer = null;
+  activeRequest?.abort();
+  activeRequest = null;
   if (cameraStream) {
     cameraStream.getTracks().forEach(track => {
       track.onended = null;
       track.stop();
     });
-
     cameraStream = null;
   }
-
   camera.srcObject = null;
   cameraPlaceholder.style.display = "block";
-
-  startButton.disabled = false;
+  startButton.disabled = isStarting;
   stopButton.disabled = true;
-
-  updateCameraStatus("Camera Off");
+  cameraStatus.textContent = "Camera Off";
   resetRecognition();
-
-  // Preserve text when the camera is stopped.
-  // The transcript is cleared only by the user.
 }
-
-// ----------------------------------
-// Start Camera
-// ----------------------------------
 
 startButton.addEventListener("click", async () => {
   if (cameraStream || isStarting) {
     return;
   }
-
   isStarting = true;
+  const session = ++generation;
   startButton.disabled = true;
+  stopButton.disabled = false;
   errorMessage.textContent = "";
-
-  updateCameraStatus("Starting Camera...");
-  recognitionStatus.textContent = "Waiting for camera access";
-
+  cameraStatus.textContent = "Starting Camera…";
+  resetRecognition("Waiting for camera access");
   try {
     if (!navigator.mediaDevices?.getUserMedia) {
       throw new Error("Camera API unavailable");
     }
-
-    const stream =
-      await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: false
-      });
-
+    const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+    if (session !== generation) {
+      stream.getTracks().forEach(track => track.stop());
+      return;
+    }
     cameraStream = stream;
     camera.srcObject = stream;
-
-    await camera.play();
-
-    const videoTrack = stream.getVideoTracks()[0];
-
-    if (videoTrack) {
-      videoTrack.onended = () => {
+    stream.getVideoTracks().forEach(track => {
+      track.onended = () => {
         stopCamera();
-        errorMessage.textContent =
-          "Camera connection ended. Please try again.";
+        errorMessage.textContent = "Camera connection ended. Please try again.";
       };
+    });
+    await camera.play();
+    if (session !== generation) {
+      return;
     }
-
     cameraPlaceholder.style.display = "none";
-    startButton.disabled = true;
-    stopButton.disabled = false;
-
-    updateCameraStatus("Camera Active");
-    recognitionStatus.textContent =
-      "Camera ready - select a demo letter";
-
-    updateRecognitionControls();
+    cameraStatus.textContent = "Camera Active";
+    resetRecognition("Looking for a sign…");
+    recognizeFrame(session);
   } catch (error) {
-    console.error("Camera error:", error);
-    stopCamera();
-
-    updateCameraStatus("Camera Error");
-
-    if (error.name === "NotAllowedError") {
-      errorMessage.textContent =
-        "Camera permission denied. Allow access in browser settings.";
-    } else if (error.name === "NotFoundError") {
-      errorMessage.textContent =
-        "No webcam was detected.";
-    } else if (error.name === "NotReadableError") {
-      errorMessage.textContent =
-        "Webcam is already in use or unavailable.";
-    } else {
-      errorMessage.textContent =
-        "Unable to start the camera. Please try again.";
+    if (session !== generation) {
+      return;
     }
-
+    stopCamera();
+    cameraStatus.textContent = "Camera Error";
+    const messages = {
+      NotAllowedError: "Camera permission denied. Allow access in browser settings.",
+      NotFoundError: "No webcam was detected.",
+      NotReadableError: "Webcam is already in use or unavailable."
+    };
+    errorMessage.textContent = messages[error.name] || "Unable to start the camera. Open this app on localhost and try again.";
     recognitionStatus.textContent = "Camera unavailable";
   } finally {
     isStarting = false;
+    startButton.disabled = cameraStream !== null;
+    stopButton.disabled = cameraStream === null;
   }
 });
-
-// ----------------------------------
-// Stop Camera Button
-// ----------------------------------
 
 stopButton.addEventListener("click", () => {
   stopCamera();
   errorMessage.textContent = "";
 });
 
-// ----------------------------------
-// Simulated Recognition Controls
-// ----------------------------------
-
-demoLetter.addEventListener("change", () => {
-  // A selection must be tested before it can be added.
-  currentLetter = "";
-  detectedLetter.textContent = "—";
-  confidenceText.textContent = "Recognition confidence: —";
-
-  recognitionStatus.textContent = cameraStream
-    ? "Click Test Result to display this letter"
-    : "Start camera first";
-
-  updateRecognitionControls();
-  updateTranscriptControls();
-});
-
-testRecognition.addEventListener("click", () => {
-  if (!cameraStream) {
-    recognitionStatus.textContent = "Start camera first";
+addLetterButton.addEventListener("click", () => {
+  if (!currentLetter) {
     return;
   }
-
-  displayRecognitionResult(demoLetter.value);
+  transcript += currentLetter;
+  transcriptStatus.textContent = `Added ${currentLetter} to transcript`;
+  updateTranscript();
 });
 
-// ----------------------------------
-// Transcript Button Events
-// ----------------------------------
-
-addLetterButton.addEventListener(
-  "click",
-  addLetterToTranscript
-);
-
-addSpaceButton.addEventListener(
-  "click",
-  addSpaceToTranscript
-);
-
-deleteLastButton.addEventListener(
-  "click",
-  deleteLastCharacter
-);
-
-clearTextButton.addEventListener(
-  "click",
-  clearTranscript
-);
-
-resetSessionButton.addEventListener(
-  "click",
-  resetSession
-);
-
-// ----------------------------------
-// Stop Camera When Page Closes
-// ----------------------------------
-
-window.addEventListener("pagehide", () => {
-  if (cameraStream) {
-    cameraStream.getTracks().forEach(track => {
-      track.onended = null;
-      track.stop();
-    });
-
-    cameraStream = null;
-  }
+clearTextButton.addEventListener("click", () => {
+  transcript = "";
+  transcriptStatus.textContent = "Transcript cleared";
+  updateTranscript();
 });
 
-// ----------------------------------
-// Initialize Application
-// ----------------------------------
-
+window.addEventListener("pagehide", stopCamera);
 resetRecognition();
-updateCameraStatus("Camera Off");
-updateTranscriptDisplay();
-
+cameraStatus.textContent = "Camera Off";
 startButton.disabled = false;
 stopButton.disabled = true;
+checkModel();

@@ -62,9 +62,10 @@
       <h2>Translation Preview</h2>
 
       <p class="note">
-        Live ASL recognition integration is pending.
-        The controls below use simulated letters.
+        Show one hand and hold a sign steady. Supported letters: A, B, C, L, Y.
       </p>
+
+      <p id="modelStatus" class="note" role="status">Checking model…</p>
 
       <div class="result-box">
 
@@ -82,55 +83,6 @@
           Recognition confidence: —
         </p>
 
-        <div class="demo-controls">
-
-          <label for="demoLetter">
-            Test Recognition Result
-          </label>
-
-          <select id="demoLetter">
-            <option value="">Select a letter</option>
-            <option value="A">A</option>
-            <option value="B">B</option>
-            <option value="C">C</option>
-            <option value="D">D</option>
-            <option value="E">E</option>
-            <option value="F">F</option>
-            <option value="G">G</option>
-            <option value="H">H</option>
-            <option value="I">I</option>
-            <option value="J">J</option>
-            <option value="K">K</option>
-            <option value="L">L</option>
-            <option value="M">M</option>
-            <option value="N">N</option>
-            <option value="O">O</option>
-            <option value="P">P</option>
-            <option value="Q">Q</option>
-            <option value="R">R</option>
-            <option value="S">S</option>
-            <option value="T">T</option>
-            <option value="U">U</option>
-            <option value="V">V</option>
-            <option value="W">W</option>
-            <option value="X">X</option>
-            <option value="Y">Y</option>
-            <option value="Z">Z</option>
-          </select>
-
-          <button
-            type="button"
-            id="testRecognition"
-            disabled>
-            Test Result
-          </button>
-
-        </div>
-
-        <p class="demo-note">
-          Demo Mode: Letters are simulated.
-          No actual ASL sign recognition is performed.
-        </p>
       </div>
 
       <!-- F-03: Translation Transcript -->
@@ -150,26 +102,14 @@
             Add Letter
           </button>
 
-          <button type="button" id="addSpace" disabled>
-            Add Space
-          </button>
-
-          <button type="button" id="deleteLast" disabled>
-            Delete Last
-          </button>
-
           <button type="button" id="clearText" disabled>
-            Clear Text
-          </button>
-
-          <button type="button" id="resetSession">
-            Reset Session
+            Clear Transcript
           </button>
 
         </div>
 
         <p id="transcriptStatus" role="status">
-          Start the camera and test a letter.
+          Start the camera, hold a sign, then click Add Letter. Text stays until cleared or the page is reloaded.
         </p>
 
       </div>
