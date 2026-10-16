@@ -31,14 +31,14 @@ Models has to be trained on the rest of the letters.
 ### macOS / Linux
 
 ```bash
-python3.12 scripts/setup.py
+python -m pip install -r requirements.txt
 .venv/bin/python run.py --port 5001
 ```
 
 ### Windows (PowerShell or Command Prompt)
 
 ```powershell
-py -3.12 scripts/setup.py
+python -m pip install -r requirements.txt
 .venv\Scripts\python.exe run.py --port 5001
 ```
 
