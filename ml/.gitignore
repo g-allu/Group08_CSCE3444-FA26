@@ -1,8 +1,12 @@
-.venv/
 __pycache__/
 .pytest_cache/
 *.py[cod]
-data/
-artifacts/
-reports/local/
+data/*
+!data/models/
+data/models/*
+!data/models/hand_landmarker.task
+artifacts/*
+!artifacts/asl_five_letters.joblib
+!artifacts/model_metadata.json
+reports/
 .DS_Store
