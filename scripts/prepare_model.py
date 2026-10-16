@@ -19,7 +19,7 @@ def main():
             print("Compatible model already exists. Skipping download, extraction, and training.", flush=True)
             return
 
-    # Setup output must not overwrite the checked-in experiment reports.
+    # Keep generated reports local and ignored by Git.
     asl.REPORTS = asl.ROOT / "reports/local"
     asl.download()
     try:

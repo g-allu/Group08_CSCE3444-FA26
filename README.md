@@ -8,12 +8,11 @@ or separate backend service is needed.
 ## Quick start
 
 You need **Python 3.12**, an internet connection for initial setup, and a webcam.
-Node.js is optional and only needed for frontend tests.
 
 Clone the repository, or download and extract its ZIP:
 
 ```bash
-git clone https://github.com/g-allu/Group08_CSCE3444-FA26.git
+git clone --branch mvp-production --single-branch https://github.com/g-allu/Group08_CSCE3444-FA26.git
 cd Group08_CSCE3444-FA26
 ```
 
@@ -86,17 +85,15 @@ than copying your local environment.
 run.py                  Start the combined app
 requirements.txt        Install the complete Python environment
 scripts/                Initial setup and model preparation
-frontend/               HTML, CSS, JavaScript, and frontend tests
-backend/                Flask API, model integration, and tests/
-ml/                     Model pipeline, tests/, and experiment reports/
-docs/                   Development, API, and troubleshooting guides
+frontend/               HTML, CSS, and JavaScript
+backend/                Flask API and model integration
+ml/                     Model pipeline and pretrained assets
 .venv/                  Local Python environment (generated, ignored)
 ```
 
-- [Development and testing](docs/DEVELOPMENT.md)
-- [API reference](docs/API.md)
-- [Troubleshooting](docs/TROUBLESHOOTING.md)
-- [Model experiment results and limitations](ml/reports/RESULTS.md)
+Tests, extra documentation, and generated experiment reports stay local and are
+excluded from this branch's distributable files. Training and evaluation code
+remain available in `ml/asl_model.py`; generated datasets and reports stay ignored.
 
 ## Team
 

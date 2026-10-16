@@ -2,6 +2,16 @@
 AGENTS.md
 agents.md
 
+# Local documentation, generated reports, and tests are not shipped.
+/docs/
+/ml/reports/
+tests/
+test/
+test_*.py
+*_test.py
+*.test.*
+*.spec.*
+
 # Python environments and generated files
 /.venv/
 venv/
@@ -30,7 +40,6 @@ coverage.xml
 /ml/artifacts/*
 !/ml/artifacts/asl_five_letters.joblib
 !/ml/artifacts/model_metadata.json
-/ml/reports/local/
 
 # Local configuration; keep shareable examples
 .env

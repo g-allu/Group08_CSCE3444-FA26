@@ -8,5 +8,5 @@ data/models/*
 artifacts/*
 !artifacts/asl_five_letters.joblib
 !artifacts/model_metadata.json
-reports/local/
+reports/
 .DS_Store
