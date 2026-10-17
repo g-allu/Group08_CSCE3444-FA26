@@ -6,9 +6,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
   <title>ASL Translator | The Thinkers</title>
-
   <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
 
   <!-- Application Header -->
@@ -30,6 +30,7 @@
       </div>
 
       <div class="camera-box">
+
         <video
           id="camera"
           autoplay
@@ -41,9 +42,11 @@
         <p id="cameraPlaceholder">
           Click Start Camera to begin
         </p>
+
       </div>
 
       <div class="camera-controls">
+
         <button type="button" id="startCamera">
           Start Camera
         </button>
@@ -51,9 +54,11 @@
         <button type="button" id="stopCamera" disabled>
           Stop Camera
         </button>
+
       </div>
 
       <p id="errorMessage" role="alert"></p>
+
     </section>
 
     <!-- F-02: Recognition Results -->
@@ -62,10 +67,13 @@
       <h2>Translation Preview</h2>
 
       <p class="note">
-        Show one hand and hold a sign steady. Supported letters: A, B, C, L, Y.
+        Show one hand and hold a sign steady.
+        Currently supported letters: A, B, C, L, Y.
       </p>
 
-      <p id="modelStatus" class="note" role="status">Checking model…</p>
+      <p id="modelStatus" class="note" role="status">
+        Checking model…
+      </p>
 
       <div class="result-box">
 
@@ -102,14 +110,27 @@
             Add Letter
           </button>
 
+          <button type="button" id="addSpace" disabled>
+            Add Space
+          </button>
+
+          <button type="button" id="deleteLast" disabled>
+            Delete Last
+          </button>
+
           <button type="button" id="clearText" disabled>
             Clear Transcript
+          </button>
+
+          <button type="button" id="resetSession">
+            Reset Session
           </button>
 
         </div>
 
         <p id="transcriptStatus" role="status">
-          Start the camera, hold a sign, then click Add Letter. Text stays until cleared or the page is reloaded.
+          Start the camera, hold a supported sign,
+          and click Add Letter to build your transcript.
         </p>
 
       </div>
@@ -125,5 +146,6 @@
   </footer>
 
   <script src="script.js"></script>
+
 </body>
 </html>
