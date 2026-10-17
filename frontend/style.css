@@ -1,591 +1,358 @@
 
-// ASL Translator - Group 08
-// The Thinkers
-// F-01: Camera Access
-// F-02: Recognition Results
-// F-03: Transcript Management
+/* ASL Translator - Group 08 */
+/* The Thinkers */
 
-// ----------------------------------
-// HTML Elements
-// ----------------------------------
+/* General Layout */
 
-const camera = document.getElementById("camera");
-const startButton = document.getElementById("startCamera");
-const stopButton = document.getElementById("stopCamera");
-
-const cameraStatus = document.getElementById("cameraStatus");
-const cameraPlaceholder = document.getElementById("cameraPlaceholder");
-const errorMessage = document.getElementById("errorMessage");
-
-const modelStatus = document.getElementById("modelStatus");
-const detectedLetter = document.getElementById("detectedLetter");
-const recognitionStatus = document.getElementById("recognitionStatus");
-const confidenceText = document.getElementById("confidenceText");
-
-const transcriptDisplay = document.getElementById("transcript");
-const transcriptStatus = document.getElementById("transcriptStatus");
-
-const addLetterButton = document.getElementById("addLetter");
-const addSpaceButton = document.getElementById("addSpace");
-const deleteLastButton = document.getElementById("deleteLast");
-const clearTextButton = document.getElementById("clearText");
-const resetSessionButton = document.getElementById("resetSession");
-
-// ----------------------------------
-// Camera and Recognition Setup
-// ----------------------------------
-
-const canvas = document.createElement("canvas");
-const context = canvas.getContext("2d");
-
-const supportedLetters = new Set([
-  "A", "B", "C", "L", "Y"
-]);
-
-// ----------------------------------
-// Application State
-// ----------------------------------
-
-let cameraStream = null;
-let isStarting = false;
-
-let transcript = "";
-let currentLetter = "";
-let previousLetter = "";
-let consecutivePredictions = 0;
-
-let generation = 0;
-let recognitionTimer = null;
-let activeRequest = null;
-
-// ----------------------------------
-// F-03: Update Transcript
-// ----------------------------------
-
-function updateTranscript() {
-  transcriptDisplay.textContent =
-    transcript || "No translation yet";
-
-  addLetterButton.disabled =
-    currentLetter === "" || cameraStream === null;
-
-  addSpaceButton.disabled =
-    transcript.length === 0 ||
-    transcript.endsWith(" ");
-
-  deleteLastButton.disabled =
-    transcript.length === 0;
-
-  clearTextButton.disabled =
-    transcript.length === 0;
+* {
+  box-sizing: border-box;
 }
 
-// ----------------------------------
-// Reset Recognition Display
-// ----------------------------------
-
-function resetRecognition(message = "Waiting for camera") {
-  currentLetter = "";
-  previousLetter = "";
-  consecutivePredictions = 0;
-
-  detectedLetter.textContent = "—";
-
-  confidenceText.textContent =
-    "Recognition confidence: —";
-
-  recognitionStatus.textContent = message;
-
-  updateTranscript();
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: Arial, sans-serif;
+  background: #f4f6fa;
+  color: #243247;
 }
 
-// ----------------------------------
-// F-02: Display Recognition Results
-// ----------------------------------
+/* Header */
 
-function displayRecognitionResult(result) {
-  const messages = {
-    no_hand: "Show one hand to the camera",
-    multiple_hands: "Please show only one hand",
-    invalid_landmarks: "Hand unclear. Adjust your position",
-    uncertain: "Sign uncertain. Hold A, B, C, L, or Y clearly"
-  };
-
-  const validConfidence =
-    typeof result.confidence === "number" &&
-    Number.isFinite(result.confidence) &&
-    result.confidence >= 0 &&
-    result.confidence <= 1;
-
-  if (
-    result.status !== "recognized" ||
-    !supportedLetters.has(result.letter) ||
-    !validConfidence
-  ) {
-    resetRecognition(
-      messages[result.status] || "No valid letter detected"
-    );
-    return;
-  }
-
-  // Require two consecutive matching predictions.
-  consecutivePredictions =
-    result.letter === previousLetter
-      ? consecutivePredictions + 1
-      : 1;
-
-  previousLetter = result.letter;
-
-  currentLetter =
-    consecutivePredictions >= 2
-      ? result.letter
-      : "";
-
-  detectedLetter.textContent =
-    currentLetter || "—";
-
-  confidenceText.textContent =
-    `Recognition confidence: ${Math.round(result.confidence * 100)}%`;
-
-  recognitionStatus.textContent =
-    currentLetter
-      ? "Letter ready. Click Add Letter"
-      : "Hold the sign steady";
-
-  updateTranscript();
+.header {
+  background: #17365d;
+  color: white;
+  text-align: center;
+  padding: 28px 15px;
 }
 
-// ----------------------------------
-// Check Backend Model
-// ----------------------------------
+.header h1 {
+  margin: 0;
+  font-size: 32px;
+}
 
-async function checkModel() {
-  const controller = new AbortController();
+.header p {
+  margin-bottom: 0;
+  color: #dce8f5;
+  font-size: 15px;
+}
 
-  const timeout = setTimeout(() => {
-    controller.abort();
-  }, 5000);
+/* Main Container */
 
-  try {
-    const response = await fetch("/api/health", {
-      signal: controller.signal,
-      cache: "no-store"
-    });
+.container {
+  max-width: 1100px;
+  margin: 35px auto;
+  padding: 0 20px;
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  align-items: start;
+  gap: 25px;
+}
 
-    const result = await response.json();
+/* Main Sections */
 
-    if (!response.ok || !result.ready) {
-      throw new Error(
-        result.error ||
-        "Model unavailable. Prepare model assets and restart Flask."
-      );
-    }
+.camera-section,
+.translation-section {
+  background: white;
+  padding: 24px;
+  border-radius: 12px;
+  box-shadow: 0 3px 14px rgba(0, 0, 0, 0.08);
+}
 
-    modelStatus.textContent =
-      "Model ready · A, B, C, L, Y";
+.camera-section h2,
+.translation-section h2 {
+  font-size: 22px;
+}
 
-  } catch (error) {
-    modelStatus.textContent =
-      error.name === "AbortError"
-        ? "Model check timed out. Start the camera to retry."
-        : error.message;
+/* Camera Heading */
 
-  } finally {
-    clearTimeout(timeout);
+.section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.section-heading h2 {
+  margin-top: 0;
+}
+
+/* Camera Status */
+
+#cameraStatus {
+  background: #e5e7eb;
+  padding: 7px 12px;
+  border-radius: 20px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+/* Live Camera */
+
+.camera-box {
+  position: relative;
+  background: #111827;
+  border-radius: 10px;
+  overflow: hidden;
+  aspect-ratio: 4 / 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#camera {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+#cameraPlaceholder {
+  position: absolute;
+  color: white;
+  text-align: center;
+  padding: 15px;
+  pointer-events: none;
+}
+
+/* Camera Controls */
+
+.camera-controls {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+  flex-wrap: wrap;
+}
+
+/* General Buttons */
+
+button {
+  padding: 12px 20px;
+  border: none;
+  border-radius: 7px;
+  background: #235ba5;
+  color: white;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+button:hover:not(:disabled) {
+  background: #17437c;
+}
+
+button:disabled {
+  background: #a9b2bf;
+  cursor: not-allowed;
+}
+
+button:focus-visible,
+select:focus-visible {
+  outline: 3px solid #60a5fa;
+  outline-offset: 2px;
+}
+
+/* Error Messages */
+
+#errorMessage {
+  color: #b42318;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+#errorMessage:empty {
+  display: none;
+}
+
+/* Recognition and Transcript Boxes */
+
+.result-box,
+.transcript-box {
+  background: #f5f7fa;
+  border: 1px solid #dce3eb;
+  padding: 18px;
+  border-radius: 8px;
+  margin-top: 18px;
+}
+
+.result-box h3,
+.transcript-box h3 {
+  margin-top: 0;
+  font-size: 17px;
+}
+
+/* Detected Letter */
+
+#detectedLetter {
+  font-size: 48px;
+  font-weight: bold;
+  margin: 15px 0;
+  min-height: 60px;
+  text-align: center;
+  color: #17365d;
+}
+
+/* Recognition Messages */
+
+#recognitionStatus {
+  font-size: 14px;
+  font-weight: 600;
+  color: #235ba5;
+  text-align: center;
+}
+
+#confidenceText {
+  color: #687586;
+  font-size: 14px;
+  text-align: center;
+}
+
+/* Recognition Demo Controls */
+
+.demo-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.demo-controls label {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.demo-controls select {
+  width: 100%;
+  padding: 11px;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  font-size: 15px;
+  color: #243247;
+  background: white;
+}
+
+.demo-controls button {
+  width: 100%;
+}
+
+.demo-note {
+  font-size: 12px;
+  color: #687586;
+  line-height: 1.5;
+  margin-top: 14px;
+}
+
+/* F-03 Transcript */
+
+#transcript {
+  background: white;
+  border: 1px solid #dce3eb;
+  border-radius: 7px;
+  padding: 16px;
+  min-height: 75px;
+  font-size: 18px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+/* Transcript Buttons */
+
+.transcript-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.transcript-controls button {
+  width: 100%;
+  padding: 12px 8px;
+}
+
+#resetSession {
+  grid-column: 1 / -1;
+  background: #374151;
+}
+
+#resetSession:hover:not(:disabled) {
+  background: #1f2937;
+}
+
+/* Transcript Status */
+
+#transcriptStatus {
+  margin-top: 14px;
+  color: #687586;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* General Information */
+
+.note {
+  color: #687586;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* Footer */
+
+footer {
+  text-align: center;
+  padding: 20px;
+  color: #687586;
+  font-size: 13px;
+}
+
+/* Tablet and Mobile */
+
+@media (max-width: 760px) {
+  .container {
+    grid-template-columns: 1fr;
+    margin: 20px auto;
+  }
+
+  .camera-section,
+  .translation-section {
+    padding: 18px;
+  }
+
+  .camera-controls {
+    flex-wrap: wrap;
+  }
+
+  .section-heading {
+    flex-wrap: wrap;
+  }
+
+  .header h1 {
+    font-size: 27px;
+  }
+
+  #detectedLetter {
+    font-size: 42px;
   }
 }
 
-// ----------------------------------
-// Send Webcam Frames to Backend
-// ----------------------------------
-
-async function recognizeFrame(session) {
-  if (session !== generation || !cameraStream) {
-    return;
+@media (max-width: 420px) {
+  .container {
+    padding: 0 12px;
   }
 
-  const started = performance.now();
-
-  let retryDelay = 0;
-  let timeout = null;
-  let controller = null;
-
-  try {
-    if (
-      !camera.videoWidth ||
-      !camera.videoHeight ||
-      camera.readyState < 2
-    ) {
-      recognitionTimer = setTimeout(() => {
-        recognizeFrame(session);
-      }, 200);
-
-      return;
-    }
-
-    // Resize the camera frame before sending it.
-    const scale = Math.min(
-      1,
-      640 / Math.max(camera.videoWidth, camera.videoHeight)
-    );
-
-    canvas.width = Math.max(
-      1,
-      Math.round(camera.videoWidth * scale)
-    );
-
-    canvas.height = Math.max(
-      1,
-      Math.round(camera.videoHeight * scale)
-    );
-
-    // Capture original camera pixels.
-    context.drawImage(
-      camera,
-      0,
-      0,
-      canvas.width,
-      canvas.height
-    );
-
-    const blob = await new Promise(resolve => {
-      canvas.toBlob(resolve, "image/jpeg", 0.85);
-    });
-
-    if (session !== generation || !cameraStream) {
-      return;
-    }
-
-    if (!blob) {
-      throw new Error(
-        "Unable to capture a camera frame. Please try again."
-      );
-    }
-
-    const form = new FormData();
-    form.append("file", blob, "frame.jpg");
-
-    controller = new AbortController();
-    activeRequest = controller;
-
-    timeout = setTimeout(() => {
-      controller.abort();
-    }, 5000);
-
-    const response = await fetch("/api/predict", {
-      method: "POST",
-      body: form,
-      signal: controller.signal
-    });
-
-    const result = await response.json();
-
-    if (session !== generation || !cameraStream) {
-      return;
-    }
-
-    if (!response.ok) {
-      throw new Error(
-        result.error ||
-        "Recognition service unavailable. Retrying…"
-      );
-    }
-
-    errorMessage.textContent = "";
-
-    modelStatus.textContent =
-      "Model ready · A, B, C, L, Y";
-
-    displayRecognitionResult(result);
-
-  } catch (error) {
-    if (session !== generation || !cameraStream) {
-      return;
-    }
-
-    resetRecognition(
-      "Recognition unavailable. Retrying…"
-    );
-
-    modelStatus.textContent =
-      "Recognition service unavailable";
-
-    errorMessage.textContent =
-      error.name === "AbortError"
-        ? "Recognition timed out. Retrying…"
-        : error instanceof TypeError
-          ? "Unable to reach the backend. Retrying…"
-          : error.message;
-
-    retryDelay = 2000;
-
-  } finally {
-    clearTimeout(timeout);
-
-    if (activeRequest === controller) {
-      activeRequest = null;
-    }
+  .camera-controls {
+    flex-direction: column;
   }
 
-  if (session === generation && cameraStream) {
-    recognitionTimer = setTimeout(
-      () => recognizeFrame(session),
-      retryDelay ||
-      Math.max(0, 200 - (performance.now() - started))
-    );
+  .camera-controls button {
+    width: 100%;
+  }
+
+  .transcript-controls {
+    grid-template-columns: 1fr;
+  }
+
+  #resetSession {
+    grid-column: auto;
   }
 }
-
-// ----------------------------------
-// F-01: Stop Camera
-// ----------------------------------
-
-function stopCamera() {
-  generation += 1;
-
-  clearTimeout(recognitionTimer);
-  recognitionTimer = null;
-
-  if (activeRequest) {
-    activeRequest.abort();
-    activeRequest = null;
-  }
-
-  if (cameraStream) {
-    cameraStream.getTracks().forEach(track => {
-      track.onended = null;
-      track.stop();
-    });
-
-    cameraStream = null;
-  }
-
-  camera.srcObject = null;
-  cameraPlaceholder.style.display = "block";
-
-  startButton.disabled = isStarting;
-  stopButton.disabled = true;
-
-  cameraStatus.textContent = "Camera Off";
-
-  resetRecognition();
-
-  // Preserve the transcript when the camera stops.
-}
-
-// ----------------------------------
-// F-01: Start Camera
-// ----------------------------------
-
-startButton.addEventListener("click", async () => {
-  if (cameraStream || isStarting) {
-    return;
-  }
-
-  isStarting = true;
-
-  const session = ++generation;
-
-  startButton.disabled = true;
-  stopButton.disabled = false;
-
-  errorMessage.textContent = "";
-  cameraStatus.textContent = "Starting Camera…";
-
-  resetRecognition("Waiting for camera access");
-
-  try {
-    if (!navigator.mediaDevices?.getUserMedia) {
-      throw new Error("Camera API unavailable");
-    }
-
-    const stream =
-      await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: false
-      });
-
-    if (session !== generation) {
-      stream.getTracks().forEach(track => track.stop());
-      return;
-    }
-
-    cameraStream = stream;
-    camera.srcObject = stream;
-
-    stream.getVideoTracks().forEach(track => {
-      track.onended = () => {
-        stopCamera();
-
-        errorMessage.textContent =
-          "Camera connection ended. Please try again.";
-      };
-    });
-
-    await camera.play();
-
-    if (session !== generation) {
-      return;
-    }
-
-    cameraPlaceholder.style.display = "none";
-
-    cameraStatus.textContent = "Camera Active";
-
-    resetRecognition("Looking for a sign…");
-
-    recognizeFrame(session);
-
-  } catch (error) {
-    if (session !== generation) {
-      return;
-    }
-
-    stopCamera();
-
-    cameraStatus.textContent = "Camera Error";
-
-    const messages = {
-      NotAllowedError:
-        "Camera permission denied. Allow access in browser settings.",
-      NotFoundError:
-        "No webcam was detected.",
-      NotReadableError:
-        "Webcam is already in use or unavailable."
-    };
-
-    errorMessage.textContent =
-      messages[error.name] ||
-      "Unable to start the camera. Open this app on localhost and try again.";
-
-    recognitionStatus.textContent =
-      "Camera unavailable";
-
-  } finally {
-    isStarting = false;
-
-    startButton.disabled =
-      cameraStream !== null;
-
-    stopButton.disabled =
-      cameraStream === null;
-  }
-});
-
-// ----------------------------------
-// Stop Camera Button
-// ----------------------------------
-
-stopButton.addEventListener("click", () => {
-  stopCamera();
-  errorMessage.textContent = "";
-});
-
-// ----------------------------------
-// F-03: Add Recognized Letter
-// ----------------------------------
-
-addLetterButton.addEventListener("click", () => {
-  if (!currentLetter || !cameraStream) {
-    return;
-  }
-
-  transcript += currentLetter;
-
-  transcriptStatus.textContent =
-    `Added ${currentLetter} to transcript`;
-
-  updateTranscript();
-});
-
-// ----------------------------------
-// F-03: Add Space
-// ----------------------------------
-
-addSpaceButton.addEventListener("click", () => {
-  if (
-    transcript.length === 0 ||
-    transcript.endsWith(" ")
-  ) {
-    return;
-  }
-
-  transcript += " ";
-
-  transcriptStatus.textContent =
-    "Space added";
-
-  updateTranscript();
-});
-
-// ----------------------------------
-// F-03: Delete Last Character
-// ----------------------------------
-
-deleteLastButton.addEventListener("click", () => {
-  if (transcript.length === 0) {
-    return;
-  }
-
-  transcript = transcript.slice(0, -1);
-
-  transcriptStatus.textContent =
-    "Last character removed";
-
-  updateTranscript();
-});
-
-// ----------------------------------
-// F-03: Clear Transcript
-// ----------------------------------
-
-clearTextButton.addEventListener("click", () => {
-  transcript = "";
-
-  transcriptStatus.textContent =
-    "Transcript cleared";
-
-  updateTranscript();
-});
-
-// ----------------------------------
-// F-03: Reset Session
-// ----------------------------------
-
-resetSessionButton.addEventListener("click", () => {
-  transcript = "";
-
-  resetRecognition(
-    cameraStream
-      ? "Looking for a sign…"
-      : "Waiting for camera"
-  );
-
-  transcriptStatus.textContent =
-    "Session reset. Ready for a new translation.";
-
-  updateTranscript();
-
-  // The webcam remains active if already running.
-});
-
-// ----------------------------------
-// Clean Up When Page Closes
-// ----------------------------------
-
-window.addEventListener("pagehide", stopCamera);
-
-// ----------------------------------
-// Initial Application State
-// ----------------------------------
-
-resetRecognition();
-
-cameraStatus.textContent = "Camera Off";
-
-startButton.disabled = false;
-stopButton.disabled = true;
-
-updateTranscript();
-
-checkModel();
