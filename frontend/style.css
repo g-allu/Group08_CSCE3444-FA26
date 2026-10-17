@@ -94,6 +94,7 @@ body {
   border-radius: 10px;
   overflow: hidden;
   aspect-ratio: 4 / 3;
+
   display: flex;
   align-items: center;
   justify-content: center;
@@ -191,7 +192,7 @@ button:focus-visible {
   color: #17365d;
 }
 
-/* Recognition Messages */
+/* Recognition Status */
 
 #recognitionStatus {
   font-size: 14px;
@@ -206,7 +207,7 @@ button:focus-visible {
   text-align: center;
 }
 
-/* F-03 Transcript */
+/* Transcript Display */
 
 #transcript {
   background: white;
@@ -220,7 +221,7 @@ button:focus-visible {
   white-space: pre-wrap;
 }
 
-/* Transcript Buttons */
+/* Transcript Controls */
 
 .transcript-controls {
   display: grid;
@@ -232,6 +233,44 @@ button:focus-visible {
 .transcript-controls button {
   width: 100%;
   padding: 12px 8px;
+}
+
+/* Delete Last */
+
+#deleteLast {
+  background: #475569;
+}
+
+#deleteLast:hover:not(:disabled) {
+  background: #334155;
+}
+
+/* Clear Transcript */
+
+#clearText {
+  background: #9f3939;
+}
+
+#clearText:hover:not(:disabled) {
+  background: #842e2e;
+}
+
+/* Reset Session */
+
+#resetSession {
+  grid-column: 1 / -1;
+  background: #374151;
+}
+
+#resetSession:hover:not(:disabled) {
+  background: #1f2937;
+}
+
+/* Disabled State Override */
+
+.transcript-controls button:disabled {
+  background: #a9b2bf;
+  color: white;
 }
 
 /* Transcript Status */
@@ -263,6 +302,7 @@ footer {
 /* Tablet and Mobile */
 
 @media (max-width: 760px) {
+
   .container {
     grid-template-columns: 1fr;
     margin: 20px auto;
@@ -291,6 +331,7 @@ footer {
 }
 
 @media (max-width: 420px) {
+
   .container {
     padding: 0 12px;
   }
@@ -305,5 +346,9 @@ footer {
 
   .transcript-controls {
     grid-template-columns: 1fr;
+  }
+
+  #resetSession {
+    grid-column: auto;
   }
 }
