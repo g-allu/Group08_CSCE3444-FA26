@@ -202,7 +202,7 @@ select:focus-visible {
 }
 
 #confidenceText {
-  color: #687586;
+  color: #55606e;
   font-size: 14px;
   text-align: center;
 }
@@ -283,7 +283,7 @@ select:focus-visible {
 
 #transcriptStatus {
   margin-top: 14px;
-  color: #687586;
+  color: #55606e;
   font-size: 13px;
   line-height: 1.5;
 }
@@ -301,7 +301,7 @@ select:focus-visible {
 footer {
   text-align: center;
   padding: 20px;
-  color: #687586;
+  color: #55606e;
   font-size: 13px;
 }
 
