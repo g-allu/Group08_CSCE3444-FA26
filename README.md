@@ -45,3 +45,15 @@ Models has to be trained on the rest of the letters.
 4. Open the **http://localhost:5001**, click start camera and allow camera access. Show one hand and hold supported letter infront of the camera. Click add letter to add to transcript. You can stop the camera wherenever you want.
 
 5. To stop the app go to the terminal and press **Ctrl+C**
+
+# Deployment (Render, free tier)
+
+The app is deployed as a Docker web service on Render's free tier using `Dockerfile` and `render.yaml`.
+
+Live demo: _add the `onrender.com` URL here after the first deploy_
+
+1. Sign in at https://render.com with GitHub.
+2. Click **New → Blueprint**, pick this repository, and click **Apply**.
+3. Wait for the deploy log to show the service is live, then open the URL Render gives you.
+
+Every push to `main` redeploys automatically. The free service sleeps after 15 idle minutes, so the first visit after that takes about a minute to load. Open the link once before a demo.
