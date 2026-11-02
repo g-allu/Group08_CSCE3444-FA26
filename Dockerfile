@@ -1,7 +1,7 @@
 # Container for the combined Flask frontend and ASL inference API (used by Render).
 FROM python:3.12-slim
 
-# MediaPipe and OpenCV wheels need these shared libraries.
+# MediaPipe (EGL/GLES) and OpenCV (GL) wheels need these shared libraries.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends libgl1 libegl1 libgles2 libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
