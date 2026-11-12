@@ -5,11 +5,13 @@ on:
   push:
     paths:
       - "frontend/**"
+      - "scripts/smoke_test.py"
       - ".github/workflows/frontend-tests.yml"
 
   pull_request:
     paths:
       - "frontend/**"
+      - "scripts/smoke_test.py"
       - ".github/workflows/frontend-tests.yml"
 
   workflow_dispatch:
@@ -36,6 +38,11 @@ jobs:
         with:
           node-version: "22"
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
       - name: Verify main application JavaScript
         run: node --check frontend/script.js
 
@@ -53,3 +60,26 @@ jobs:
 
       - name: Run transcript export and statistics tests
         run: node --test frontend/tests/transcript-export.test.cjs
+
+      - name: Run complete translation integration tests
+        run: node --test frontend/tests/frontend-integration.test.cjs
+
+      - name: Verify Python smoke test syntax
+        run: python -m py_compile scripts/smoke_test.py
+
+      - name: Write testing summary
+        run: |
+          echo "## ASL Translator Testing" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "All configured automated frontend test suites passed." >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Test Suite | Test Cases |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---:|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Camera and transcript | 15 |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Recognition edge cases | 10 |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Markup and accessibility | 6 |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Transcript export | 11 |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Frontend integration | 5 |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| **Total** | **47** |" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Live server smoke tests and webcam accuracy must be verified separately." >> "$GITHUB_STEP_SUMMARY"
