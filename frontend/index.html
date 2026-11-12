@@ -3,31 +3,65 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <meta
+    name="description"
+    content="An American Sign Language translator developed by Group 08, The Thinkers, for CSCE 3444."
+  >
 
   <title>ASL Translator | The Thinkers</title>
+
   <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
 
+  <a class="skip-link" href="#mainContent">
+    Skip to main content
+  </a>
+
   <!-- Application Header -->
+
   <header class="header">
     <h1>ASL Translator</h1>
-    <p>American Sign Language to English</p>
+
+    <p>
+      American Sign Language to English
+    </p>
   </header>
 
-  <main class="container">
+  <!-- Main Application -->
 
-    <!-- F-01: Live Camera -->
-    <section class="camera-section">
+  <main class="container" id="mainContent" tabindex="-1">
+
+    <!-- Live Camera Section -->
+
+    <section
+      class="camera-section"
+      aria-labelledby="cameraHeading"
+    >
 
       <div class="section-heading">
-        <h2>Live Camera</h2>
+
+        <h2 id="cameraHeading">
+          Live Camera
+        </h2>
+
         <span id="cameraStatus" role="status">
           Camera Off
         </span>
+
       </div>
+
+      <p class="note" id="cameraInstructions">
+        Start your camera, allow camera access, and position
+        one hand clearly in front of the camera.
+      </p>
 
       <div class="camera-box">
 
@@ -36,8 +70,9 @@
           autoplay
           playsinline
           muted
-          aria-label="Live webcam preview">
-        </video>
+          aria-label="Live webcam preview"
+          aria-describedby="cameraInstructions"
+        ></video>
 
         <p id="cameraPlaceholder">
           Click Start Camera to begin
@@ -47,43 +82,91 @@
 
       <div class="camera-controls">
 
-        <button type="button" id="startCamera">
+        <button
+          type="button"
+          id="startCamera"
+        >
           Start Camera
         </button>
 
-        <button type="button" id="stopCamera" disabled>
+        <button
+          type="button"
+          id="stopCamera"
+          disabled
+        >
           Stop Camera
         </button>
 
       </div>
 
-      <p id="errorMessage" role="alert"></p>
+      <p
+        id="errorMessage"
+        role="alert"
+      ></p>
+
+      <div class="camera-guidance">
+
+        <h3>Tips for better recognition</h3>
+
+        <ul>
+          <li>Use a well-lit environment.</li>
+          <li>Show only one hand at a time.</li>
+          <li>Keep your hand fully visible.</li>
+          <li>Hold the sign steady until it is recognized.</li>
+        </ul>
+
+      </div>
+
+      <p class="privacy-note">
+        Camera frames are sent to the recognition server
+        while the camera is active. Stop Camera ends
+        camera capture.
+      </p>
 
     </section>
 
-    <!-- F-02: Recognition Results -->
-    <section class="translation-section">
+    <!-- Translation Section -->
 
-      <h2>Translation Preview</h2>
+    <section
+      class="translation-section"
+      aria-labelledby="translationHeading"
+    >
+
+      <h2 id="translationHeading">
+        Translation Preview
+      </h2>
 
       <p class="note">
-        Show one hand and hold a sign steady.
         Currently supported letters: A, B, C, L, Y.
+        Hold a supported sign steady to begin translating.
       </p>
 
-      <p id="modelStatus" class="note" role="status">
+      <p
+        id="modelStatus"
+        class="note"
+        role="status"
+      >
         Checking model…
       </p>
+
+      <!-- Recognition Results -->
 
       <div class="result-box">
 
         <h3>Detected Letter</h3>
 
-        <div id="detectedLetter" aria-live="polite">
+        <div
+          id="detectedLetter"
+          aria-live="polite"
+          aria-atomic="true"
+        >
           —
         </div>
 
-        <p id="recognitionStatus" role="status">
+        <p
+          id="recognitionStatus"
+          role="status"
+        >
           Waiting for camera
         </p>
 
@@ -93,44 +176,88 @@
 
       </div>
 
-      <!-- F-03: Translation Transcript -->
+      <!-- Translation Transcript -->
+
       <div class="transcript-box">
 
         <h3>Translation Transcript</h3>
 
         <p
+          id="transcriptInstructions"
+          class="note"
+        >
+          Add recognized letters to build your text.
+          Use the editing controls to correct or clear
+          your transcript.
+        </p>
+
+        <p
           id="transcript"
-          aria-live="polite">
+          aria-live="polite"
+          aria-atomic="true"
+        >
           No translation yet
         </p>
 
-        <div class="transcript-controls">
+        <div
+          class="transcript-controls"
+          role="group"
+          aria-label="Transcript editing controls"
+        >
 
-          <button type="button" id="addLetter" disabled>
+          <button
+            type="button"
+            id="addLetter"
+            disabled
+          >
             Add Letter
           </button>
 
-          <button type="button" id="addSpace" disabled>
+          <button
+            type="button"
+            id="addSpace"
+            disabled
+          >
             Add Space
           </button>
 
-          <button type="button" id="deleteLast" disabled>
+          <button
+            type="button"
+            id="deleteLast"
+            disabled
+          >
             Delete Last
           </button>
 
-          <button type="button" id="clearText" disabled>
+          <button
+            type="button"
+            id="clearText"
+            disabled
+          >
             Clear Transcript
           </button>
 
-          <button type="button" id="resetSession">
+          <button
+            type="button"
+            id="resetSession"
+          >
             Reset Session
           </button>
 
         </div>
 
-        <p id="transcriptStatus" role="status">
+        <p
+          id="transcriptStatus"
+          role="status"
+        >
           Start the camera, hold a supported sign,
           and click Add Letter to build your transcript.
+        </p>
+
+        <p class="note session-note">
+          Stopping the camera keeps your transcript.
+          Reset Session stops the camera and clears
+          your transcript.
         </p>
 
       </div>
@@ -138,6 +265,8 @@
     </section>
 
   </main>
+
+  <!-- Application Footer -->
 
   <footer>
     <p>
