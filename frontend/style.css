@@ -2,8 +2,6 @@
 /* ASL Translator - Group 08 */
 /* The Thinkers */
 
-/* General Layout */
-
 * {
   box-sizing: border-box;
 }
@@ -14,13 +12,35 @@ body {
   font-family: Arial, sans-serif;
   background: #f4f6fa;
   color: #243247;
+  line-height: 1.5;
 }
 
-/* Header */
+/* Keyboard Navigation */
+
+.skip-link {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 100;
+  padding: 12px 18px;
+  background: #17365d;
+  color: #ffffff;
+  border-radius: 6px;
+  text-decoration: none;
+  transform: translateY(-200%);
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+  outline: 3px solid #fbbf24;
+  outline-offset: 3px;
+}
+
+/* Application Header */
 
 .header {
   background: #17365d;
-  color: white;
+  color: #ffffff;
   text-align: center;
   padding: 28px 15px;
 }
@@ -28,31 +48,41 @@ body {
 .header h1 {
   margin: 0;
   font-size: 32px;
+  line-height: 1.2;
 }
 
 .header p {
-  margin-bottom: 0;
+  margin: 10px 0 0;
   color: #dce8f5;
   font-size: 15px;
 }
 
-/* Main Container */
+/* Main Layout */
 
 .container {
   max-width: 1100px;
   margin: 35px auto;
   padding: 0 20px;
+
   display: grid;
-  grid-template-columns: 1.4fr 1fr;
+  grid-template-columns:
+    minmax(0, 1.4fr)
+    minmax(0, 1fr);
+
   align-items: start;
   gap: 25px;
 }
 
-/* Main Sections */
+.container:focus {
+  outline: none;
+}
+
+/* Application Sections */
 
 .camera-section,
 .translation-section {
-  background: white;
+  min-width: 0;
+  background: #ffffff;
   padding: 24px;
   border-radius: 12px;
   box-shadow: 0 3px 14px rgba(0, 0, 0, 0.08);
@@ -61,9 +91,9 @@ body {
 .camera-section h2,
 .translation-section h2 {
   font-size: 22px;
+  margin-top: 0;
+  margin-bottom: 14px;
 }
-
-/* Camera Heading */
 
 .section-heading {
   display: flex;
@@ -73,16 +103,18 @@ body {
 }
 
 .section-heading h2 {
-  margin-top: 0;
+  margin: 0;
 }
 
 /* Camera Status */
 
 #cameraStatus {
   background: #e5e7eb;
+  color: #374151;
   padding: 7px 12px;
   border-radius: 20px;
   font-size: 13px;
+  font-weight: 600;
   white-space: nowrap;
 }
 
@@ -94,6 +126,7 @@ body {
   border-radius: 10px;
   overflow: hidden;
   aspect-ratio: 4 / 3;
+
   display: flex;
   align-items: center;
   justify-content: center;
@@ -102,13 +135,13 @@ body {
 #camera {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   display: block;
 }
 
 #cameraPlaceholder {
   position: absolute;
-  color: white;
+  color: #ffffff;
   text-align: center;
   padding: 15px;
   pointer-events: none;
@@ -118,23 +151,26 @@ body {
 
 .camera-controls {
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
   margin-top: 20px;
-  flex-wrap: wrap;
 }
 
-/* General Buttons */
+/* Buttons */
 
 button {
+  min-height: 44px;
   padding: 12px 20px;
   border: none;
   border-radius: 7px;
   background: #235ba5;
-  color: white;
+  color: #ffffff;
+  font-family: inherit;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
   transition: background 0.2s ease;
+  touch-action: manipulation;
 }
 
 button:hover:not(:disabled) {
@@ -142,26 +178,73 @@ button:hover:not(:disabled) {
 }
 
 button:disabled {
-  background: #a9b2bf;
+  background: #d5dbe3;
+  color: #4b5563;
   cursor: not-allowed;
 }
 
 button:focus-visible,
 select:focus-visible {
-  outline: 3px solid #60a5fa;
-  outline-offset: 2px;
+  outline: 3px solid #17365d;
+  outline-offset: 3px;
+}
+
+#stopCamera:not(:disabled) {
+  background: #374151;
+}
+
+#stopCamera:hover:not(:disabled) {
+  background: #1f2937;
 }
 
 /* Error Messages */
 
 #errorMessage {
   color: #b42318;
+  background: #fff1f0;
+  border: 1px solid #f3c2be;
+  border-radius: 6px;
+  padding: 12px;
   font-size: 14px;
   line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 #errorMessage:empty {
   display: none;
+}
+
+/* Camera Instructions */
+
+.camera-guidance {
+  margin-top: 22px;
+  padding: 15px;
+  background: #f5f7fa;
+  border: 1px solid #dce3eb;
+  border-radius: 8px;
+}
+
+.camera-guidance h3 {
+  font-size: 15px;
+  margin: 0 0 8px;
+}
+
+.camera-guidance ul {
+  margin: 0;
+  padding-left: 20px;
+  color: #435267;
+  font-size: 14px;
+}
+
+.camera-guidance li + li {
+  margin-top: 5px;
+}
+
+.privacy-note {
+  margin: 16px 0 0;
+  color: #55606e;
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 /* Recognition and Transcript Boxes */
@@ -177,11 +260,11 @@ select:focus-visible {
 
 .result-box h3,
 .transcript-box h3 {
-  margin-top: 0;
+  margin: 0 0 12px;
   font-size: 17px;
 }
 
-/* Detected Letter */
+/* Recognition Output */
 
 #detectedLetter {
   font-size: 48px;
@@ -192,13 +275,12 @@ select:focus-visible {
   color: #17365d;
 }
 
-/* Recognition Messages */
-
 #recognitionStatus {
   font-size: 14px;
   font-weight: 600;
   color: #235ba5;
   text-align: center;
+  overflow-wrap: anywhere;
 }
 
 #confidenceText {
@@ -207,45 +289,10 @@ select:focus-visible {
   text-align: center;
 }
 
-/* Recognition Demo Controls */
-
-.demo-controls {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-top: 20px;
-}
-
-.demo-controls label {
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.demo-controls select {
-  width: 100%;
-  padding: 11px;
-  border: 1px solid #cbd5e1;
-  border-radius: 7px;
-  font-size: 15px;
-  color: #243247;
-  background: white;
-}
-
-.demo-controls button {
-  width: 100%;
-}
-
-.demo-note {
-  font-size: 12px;
-  color: #687586;
-  line-height: 1.5;
-  margin-top: 14px;
-}
-
-/* F-03 Transcript */
+/* Transcript */
 
 #transcript {
-  background: white;
+  background: #ffffff;
   border: 1px solid #dce3eb;
   border-radius: 7px;
   padding: 16px;
@@ -256,11 +303,13 @@ select:focus-visible {
   white-space: pre-wrap;
 }
 
-/* Transcript Buttons */
+/* Transcript Controls */
 
 .transcript-controls {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+
   gap: 10px;
   margin-top: 16px;
 }
@@ -268,6 +317,7 @@ select:focus-visible {
 .transcript-controls button {
   width: 100%;
   padding: 12px 8px;
+  min-height: 44px;
 }
 
 #resetSession {
@@ -279,7 +329,7 @@ select:focus-visible {
   background: #1f2937;
 }
 
-/* Transcript Status */
+/* Status and Help Messages */
 
 #transcriptStatus {
   margin-top: 14px;
@@ -288,12 +338,17 @@ select:focus-visible {
   line-height: 1.5;
 }
 
-/* General Information */
-
 .note {
-  color: #687586;
+  color: #55606e;
   font-size: 14px;
-  line-height: 1.5;
+  line-height: 1.6;
+}
+
+.session-note {
+  border-top: 1px solid #dce3eb;
+  padding-top: 12px;
+  margin-bottom: 0;
+  font-size: 13px;
 }
 
 /* Footer */
@@ -305,21 +360,23 @@ footer {
   font-size: 13px;
 }
 
-/* Tablet and Mobile */
+footer p {
+  margin: 0;
+}
+
+/* Tablet and Mobile Layout */
 
 @media (max-width: 760px) {
+
   .container {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     margin: 20px auto;
+    gap: 18px;
   }
 
   .camera-section,
   .translation-section {
     padding: 18px;
-  }
-
-  .camera-controls {
-    flex-wrap: wrap;
   }
 
   .section-heading {
@@ -330,14 +387,26 @@ footer {
     font-size: 27px;
   }
 
+  .camera-controls button {
+    flex: 1;
+  }
+
   #detectedLetter {
     font-size: 42px;
   }
 }
 
+/* Small Mobile Screens */
+
 @media (max-width: 420px) {
+
   .container {
     padding: 0 12px;
+  }
+
+  .camera-section,
+  .translation-section {
+    padding: 15px;
   }
 
   .camera-controls {
@@ -354,5 +423,23 @@ footer {
 
   #resetSession {
     grid-column: auto;
+  }
+
+  .camera-section h2,
+  .translation-section h2 {
+    font-size: 20px;
+  }
+}
+
+/* Reduced Motion Accessibility */
+
+@media (prefers-reduced-motion: reduce) {
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
