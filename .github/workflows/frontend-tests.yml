@@ -1,0 +1,49 @@
+
+name: Frontend Tests
+
+on:
+  push:
+    paths:
+      - "frontend/**"
+      - ".github/workflows/frontend-tests.yml"
+
+  pull_request:
+    paths:
+      - "frontend/**"
+      - ".github/workflows/frontend-tests.yml"
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  frontend-tests:
+
+    name: Test ASL Translator Frontend
+
+    runs-on: ubuntu-latest
+
+    timeout-minutes: 5
+
+    steps:
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Verify JavaScript syntax
+        run: node --check frontend/script.js
+
+      - name: Run frontend interaction tests
+        run: node --test frontend/tests/frontend.test.cjs
+
+      - name: Run camera and recognition regression tests
+        run: node --test frontend/tests/frontend-edge.test.cjs
+
+      - name: Run markup and accessibility tests
+        run: node --test frontend/tests/frontend-markup.test.cjs
