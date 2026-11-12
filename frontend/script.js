@@ -20,7 +20,9 @@ const resetSessionButton = document.getElementById("resetSession");
 
 const canvas = document.createElement("canvas");
 const context = canvas.getContext("2d");
+
 const supportedLetters = new Set(["A", "B", "C", "L", "Y"]);
+const modelReadyMessage = "Model ready: A, B, C, L, Y";
 
 let cameraStream = null;
 let isStarting = false;
@@ -31,24 +33,33 @@ let consecutivePredictions = 0;
 let generation = 0;
 let recognitionTimer = null;
 let activeRequest = null;
+let modelCheckId = 0;
 
 function updateTranscript() {
-  transcriptDisplay.textContent = transcript || "No translation yet";
+  transcriptDisplay.textContent =
+    transcript || "No translation yet";
 
   addLetterButton.disabled = currentLetter === "";
   addSpaceButton.disabled =
-    transcript.length === 0 || transcript.endsWith(" ");
-  deleteLastButton.disabled = transcript.length === 0;
-  clearTextButton.disabled = transcript.length === 0;
+    !transcript || transcript.endsWith(" ");
+  deleteLastButton.disabled = !transcript;
+  clearTextButton.disabled = !transcript;
+}
+
+function updateCameraButtons() {
+  startButton.disabled = isStarting || cameraStream !== null;
+  stopButton.disabled = !isStarting && cameraStream === null;
 }
 
 function resetRecognition(message = "Waiting for camera") {
   currentLetter = "";
   previousLetter = "";
   consecutivePredictions = 0;
+
   detectedLetter.textContent = "—";
   confidenceText.textContent = "Recognition confidence: —";
   recognitionStatus.textContent = message;
+
   updateTranscript();
 }
 
@@ -61,18 +72,18 @@ function displayRecognitionResult(result) {
   };
 
   const validConfidence =
-    typeof result.confidence === "number" &&
+    typeof result?.confidence === "number" &&
     Number.isFinite(result.confidence) &&
     result.confidence >= 0 &&
     result.confidence <= 1;
 
   if (
-    result.status !== "recognized" ||
-    !supportedLetters.has(result.letter) ||
+    result?.status !== "recognized" ||
+    !supportedLetters.has(result?.letter) ||
     !validConfidence
   ) {
     resetRecognition(
-      messages[result.status] || "No valid letter detected"
+      messages[result?.status] || "No valid letter detected"
     );
     return;
   }
@@ -87,6 +98,7 @@ function displayRecognitionResult(result) {
     consecutivePredictions >= 2 ? result.letter : "";
 
   detectedLetter.textContent = currentLetter || "—";
+
   confidenceText.textContent =
     `Recognition confidence: ${Math.round(result.confidence * 100)}%`;
 
@@ -98,8 +110,11 @@ function displayRecognitionResult(result) {
 }
 
 async function checkModel() {
+  const checkId = ++modelCheckId;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 5000);
+
+  modelStatus.textContent = "Checking recognition model…";
 
   try {
     const response = await fetch("/api/health", {
@@ -111,16 +126,20 @@ async function checkModel() {
 
     if (!response.ok || !result.ready) {
       throw new Error(
-        result.error || "Model unavailable. Restart Flask."
+        result.error || "Recognition model unavailable."
       );
     }
 
-    modelStatus.textContent = "Model ready · A, B, C, L, Y";
+    if (checkId === modelCheckId) {
+      modelStatus.textContent = modelReadyMessage;
+    }
   } catch (error) {
-    modelStatus.textContent =
-      error.name === "AbortError"
-        ? "Model check timed out. Start camera to retry."
-        : error.message;
+    if (checkId === modelCheckId) {
+      modelStatus.textContent =
+        error.name === "AbortError"
+          ? "Model check timed out. Start the camera to retry."
+          : "Model unavailable. Check the recognition server.";
+    }
   } finally {
     clearTimeout(timeout);
   }
@@ -165,11 +184,7 @@ async function recognizeFrame(session) {
     );
 
     context.drawImage(
-      camera,
-      0,
-      0,
-      canvas.width,
-      canvas.height
+      camera, 0, 0, canvas.width, canvas.height
     );
 
     const blob = await new Promise(resolve =>
@@ -189,7 +204,11 @@ async function recognizeFrame(session) {
 
     controller = new AbortController();
     activeRequest = controller;
-    timeout = setTimeout(() => controller.abort(), 5000);
+
+    timeout = setTimeout(
+      () => controller.abort(),
+      5000
+    );
 
     const response = await fetch("/api/predict", {
       method: "POST",
@@ -209,23 +228,28 @@ async function recognizeFrame(session) {
       );
     }
 
+    modelCheckId++;
     errorMessage.textContent = "";
-    modelStatus.textContent = "Model ready · A, B, C, L, Y";
+    modelStatus.textContent = modelReadyMessage;
+
     displayRecognitionResult(result);
   } catch (error) {
     if (session !== generation || !cameraStream) {
       return;
     }
 
+    modelCheckId++;
     resetRecognition("Recognition unavailable. Retrying…");
-    modelStatus.textContent = "Recognition service unavailable";
+
+    modelStatus.textContent =
+      "Recognition service unavailable";
 
     errorMessage.textContent =
       error.name === "AbortError"
         ? "Recognition timed out. Retrying…"
         : error instanceof TypeError
-          ? "Unable to reach the backend. Retrying…"
-          : error.message;
+          ? "Cannot reach the recognition server. Retrying…"
+          : "Recognition failed. Retrying…";
 
     retryDelay = 2000;
   } finally {
@@ -246,7 +270,8 @@ async function recognizeFrame(session) {
 }
 
 function stopCamera() {
-  generation += 1;
+  generation++;
+
   clearTimeout(recognitionTimer);
   recognitionTimer = null;
 
@@ -258,17 +283,18 @@ function stopCamera() {
       track.onended = null;
       track.stop();
     });
+
     cameraStream = null;
   }
 
   camera.srcObject = null;
   cameraPlaceholder.style.display = "block";
 
+  cameraStatus.textContent = "Camera Off";
+  resetRecognition();
+
   startButton.disabled = isStarting;
   stopButton.disabled = true;
-  cameraStatus.textContent = "Camera Off";
-
-  resetRecognition();
 }
 
 startButton.addEventListener("click", async () => {
@@ -277,13 +303,17 @@ startButton.addEventListener("click", async () => {
   }
 
   isStarting = true;
+
   const session = ++generation;
 
-  startButton.disabled = true;
-  stopButton.disabled = false;
+  updateCameraButtons();
+
   errorMessage.textContent = "";
   cameraStatus.textContent = "Starting Camera…";
+
   resetRecognition("Waiting for camera access");
+
+  checkModel();
 
   try {
     if (!navigator.mediaDevices?.getUserMedia) {
@@ -291,7 +321,11 @@ startButton.addEventListener("click", async () => {
     }
 
     const stream = await navigator.mediaDevices.getUserMedia({
-      video: true,
+      video: {
+        facingMode: "user",
+        width: { ideal: 640 },
+        height: { ideal: 480 }
+      },
       audio: false
     });
 
@@ -305,9 +339,14 @@ startButton.addEventListener("click", async () => {
 
     stream.getVideoTracks().forEach(track => {
       track.onended = () => {
+        if (session !== generation) {
+          return;
+        }
+
         stopCamera();
+
         errorMessage.textContent =
-          "Camera connection ended. Please try again.";
+          "Camera connection ended. Start the camera again.";
       };
     });
 
@@ -321,6 +360,7 @@ startButton.addEventListener("click", async () => {
     cameraStatus.textContent = "Camera Active";
 
     resetRecognition("Looking for a sign…");
+
     recognizeFrame(session);
   } catch (error) {
     if (session !== generation) {
@@ -328,32 +368,41 @@ startButton.addEventListener("click", async () => {
     }
 
     stopCamera();
+
     cameraStatus.textContent = "Camera Error";
 
     const messages = {
       NotAllowedError:
-        "Camera permission denied. Allow access in browser settings.",
+        "Camera access denied. Allow access in browser settings.",
       NotFoundError:
         "No webcam was detected.",
       NotReadableError:
-        "Webcam is already in use or unavailable."
+        "Your webcam is unavailable or being used by another app.",
+      OverconstrainedError:
+        "The camera does not support the requested settings.",
+      SecurityError:
+        "Camera access is blocked by browser security settings."
     };
 
     errorMessage.textContent =
       messages[error.name] ||
-      "Unable to start the camera. Check browser permissions.";
+      "Unable to start the camera. Use localhost or HTTPS and check permissions.";
 
     recognitionStatus.textContent = "Camera unavailable";
   } finally {
     isStarting = false;
-    startButton.disabled = cameraStream !== null;
-    stopButton.disabled = cameraStream === null;
+    updateCameraButtons();
   }
 });
 
 stopButton.addEventListener("click", () => {
   stopCamera();
+
   errorMessage.textContent = "";
+
+  transcriptStatus.textContent = transcript
+    ? "Camera stopped. Your transcript is preserved."
+    : "Camera stopped. Start again to translate.";
 });
 
 addLetterButton.addEventListener("click", () => {
@@ -362,6 +411,7 @@ addLetterButton.addEventListener("click", () => {
   }
 
   transcript += currentLetter;
+
   transcriptStatus.textContent =
     `Added ${currentLetter} to transcript`;
 
@@ -374,7 +424,9 @@ addSpaceButton.addEventListener("click", () => {
   }
 
   transcript += " ";
+
   transcriptStatus.textContent = "Space added";
+
   updateTranscript();
 });
 
@@ -384,31 +436,39 @@ deleteLastButton.addEventListener("click", () => {
   }
 
   transcript = transcript.slice(0, -1);
-  transcriptStatus.textContent = "Last character deleted";
+
+  transcriptStatus.textContent =
+    "Last character deleted";
+
   updateTranscript();
 });
 
 clearTextButton.addEventListener("click", () => {
   transcript = "";
+
   transcriptStatus.textContent = "Transcript cleared";
+
   updateTranscript();
 });
 
 resetSessionButton.addEventListener("click", () => {
   stopCamera();
+
   transcript = "";
-  transcriptStatus.textContent = "Session reset";
+
+  transcriptStatus.textContent =
+    "Session reset. Start the camera to translate again.";
+
   errorMessage.textContent = "";
-  cameraStatus.textContent = "Camera Off";
-  startButton.disabled = false;
-  stopButton.disabled = true;
+
   updateTranscript();
 });
 
 window.addEventListener("pagehide", stopCamera);
 
 resetRecognition();
+
 cameraStatus.textContent = "Camera Off";
-startButton.disabled = false;
-stopButton.disabled = true;
+
+updateCameraButtons();
 checkModel();
