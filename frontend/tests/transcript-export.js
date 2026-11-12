@@ -4,7 +4,6 @@
 
   const emptyMessage = "No translation yet";
 
-  // Return the actual transcript instead of placeholder text.
   function getTranscript(value) {
     const text = String(value ?? "");
 
@@ -15,7 +14,6 @@
     return text;
   }
 
-  // Calculate transcript length and word count.
   function getStatistics(value) {
     const text = getTranscript(value);
 
@@ -25,7 +23,6 @@
     };
   }
 
-  // Copy the transcript to the device clipboard.
   async function copyTranscript(value, clipboard) {
     const text = getTranscript(value);
 
@@ -42,7 +39,6 @@
     return text;
   }
 
-  // Download the transcript as a plain text file.
   function downloadTranscript(value, env) {
     const text = getTranscript(value);
 
@@ -78,7 +74,6 @@
     return text;
   }
 
-  // Connect export functionality to the application.
   function initializeExport(env) {
     const doc = env.document;
 
@@ -101,10 +96,8 @@
     let lastText = null;
     let operation = 0;
 
-    // Update the export controls whenever the transcript changes.
     function update() {
       const text = getTranscript(transcript.textContent);
-
       const stats = getStatistics(text);
 
       copy.disabled = !text;
@@ -181,7 +174,6 @@
       }
     });
 
-    // Observe changes made by the existing transcript controls.
     const observer = new env.MutationObserver(update);
 
     observer.observe(transcript, {
@@ -195,7 +187,8 @@
     return observer;
   }
 
-  // Export functions for automated Node.js testing.
+  // Export functions for Node.js testing.
+
   if (
     typeof module !== "undefined" &&
     module.exports
@@ -209,7 +202,8 @@
     };
   }
 
-  // Initialize the module when running in a browser.
+  // Initialize the export module in the browser.
+
   if (
     typeof window !== "undefined" &&
     window.document
