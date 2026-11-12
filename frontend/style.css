@@ -63,12 +63,8 @@ body {
   max-width: 1100px;
   margin: 35px auto;
   padding: 0 20px;
-
   display: grid;
-  grid-template-columns:
-    minmax(0, 1.4fr)
-    minmax(0, 1fr);
-
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
   align-items: start;
   gap: 25px;
 }
@@ -126,7 +122,6 @@ body {
   border-radius: 10px;
   overflow: hidden;
   aspect-ratio: 4 / 3;
-
   display: flex;
   align-items: center;
   justify-content: center;
@@ -146,8 +141,6 @@ body {
   padding: 15px;
   pointer-events: none;
 }
-
-/* Camera Controls */
 
 .camera-controls {
   display: flex;
@@ -289,7 +282,7 @@ select:focus-visible {
   text-align: center;
 }
 
-/* Transcript */
+/* Transcript Display */
 
 #transcript {
   background: #ffffff;
@@ -297,19 +290,27 @@ select:focus-visible {
   border-radius: 7px;
   padding: 16px;
   min-height: 75px;
+  margin-bottom: 8px;
   font-size: 18px;
   line-height: 1.6;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
+  user-select: text;
 }
 
-/* Transcript Controls */
+.transcript-count {
+  margin: 0 0 14px;
+  font-size: 12px;
+  color: #55606e;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Transcript Editing Controls */
 
 .transcript-controls {
   display: grid;
-  grid-template-columns:
-    repeat(2, minmax(0, 1fr));
-
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
   margin-top: 16px;
 }
@@ -329,14 +330,68 @@ select:focus-visible {
   background: #1f2937;
 }
 
-/* Status and Help Messages */
-
 #transcriptStatus {
   margin-top: 14px;
   color: #55606e;
   font-size: 13px;
   line-height: 1.5;
 }
+
+/* Transcript Export */
+
+.transcript-export {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid #dce3eb;
+}
+
+.transcript-export h4 {
+  margin: 0 0 6px;
+  font-size: 15px;
+  color: #17365d;
+}
+
+.transcript-export .note {
+  margin: 0 0 12px;
+  font-size: 13px;
+}
+
+.export-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.export-controls button {
+  width: 100%;
+  min-height: 44px;
+  padding: 12px 8px;
+  overflow-wrap: anywhere;
+}
+
+#copyTranscript:not(:disabled),
+#downloadTranscript:not(:disabled) {
+  background: #17365d;
+}
+
+#copyTranscript:hover:not(:disabled),
+#downloadTranscript:hover:not(:disabled) {
+  background: #102947;
+}
+
+#exportStatus {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: #435267;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+#exportStatus:empty {
+  margin: 0;
+}
+
+/* Help Messages */
 
 .note {
   color: #55606e;
@@ -364,10 +419,9 @@ footer p {
   margin: 0;
 }
 
-/* Tablet and Mobile Layout */
+/* Tablet and Mobile */
 
 @media (max-width: 760px) {
-
   .container {
     grid-template-columns: minmax(0, 1fr);
     margin: 20px auto;
@@ -399,7 +453,6 @@ footer p {
 /* Small Mobile Screens */
 
 @media (max-width: 420px) {
-
   .container {
     padding: 0 12px;
   }
@@ -417,7 +470,8 @@ footer p {
     width: 100%;
   }
 
-  .transcript-controls {
+  .transcript-controls,
+  .export-controls {
     grid-template-columns: 1fr;
   }
 
@@ -434,7 +488,6 @@ footer p {
 /* Reduced Motion Accessibility */
 
 @media (prefers-reduced-motion: reduce) {
-
   *,
   *::before,
   *::after {
