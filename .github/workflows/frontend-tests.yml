@@ -36,8 +36,11 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Verify JavaScript syntax
+      - name: Verify main application JavaScript
         run: node --check frontend/script.js
+
+      - name: Verify transcript export JavaScript
+        run: node --check frontend/transcript-export.js
 
       - name: Run frontend interaction tests
         run: node --test frontend/tests/frontend.test.cjs
@@ -47,3 +50,6 @@ jobs:
 
       - name: Run markup and accessibility tests
         run: node --test frontend/tests/frontend-markup.test.cjs
+
+      - name: Run transcript export and statistics tests
+        run: node --test frontend/tests/transcript-export.test.cjs
