@@ -5,26 +5,33 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 
-// Load the actual frontend JavaScript.
-
+// Load the actual application script.
 const source = fs.readFileSync(
-  path.join(__dirname, "../frontend/script.js"),
+  path.join(__dirname, "../script.js"),
   "utf8"
 );
 
-// Create a simulated browser element.
-
 function createElement() {
   const listeners = new Map();
+  let text = "";
 
   return {
-    textContent: "",
     disabled: false,
     style: {},
     srcObject: null,
     videoWidth: 0,
     videoHeight: 0,
     readyState: 0,
+    textWrites: 0,
+
+    get textContent() {
+      return text;
+    },
+
+    set textContent(value) {
+      text = value;
+      this.textWrites++;
+    },
 
     addEventListener(event, callback) {
       listeners.set(event, callback);
@@ -36,13 +43,9 @@ function createElement() {
       }
     },
 
-    async play() {
-      return undefined;
-    }
+    async play() {}
   };
 }
-
-// Create a simulated webcam stream.
 
 function createCameraStream() {
   const track = {
@@ -67,27 +70,16 @@ function createCameraStream() {
   };
 }
 
-// Create a controlled frontend testing environment.
-
 function setup(options = {}) {
   const ids = [
-    "camera",
-    "startCamera",
-    "stopCamera",
-    "cameraStatus",
-    "cameraPlaceholder",
-    "errorMessage",
-    "modelStatus",
-    "detectedLetter",
-    "recognitionStatus",
-    "confidenceText",
-    "transcript",
-    "transcriptStatus",
-    "addLetter",
-    "addSpace",
-    "deleteLast",
-    "clearText",
-    "resetSession"
+    "camera", "startCamera", "stopCamera",
+    "cameraStatus", "cameraPlaceholder",
+    "errorMessage", "modelStatus",
+    "detectedLetter", "recognitionStatus",
+    "confidenceText", "transcript",
+    "transcriptStatus", "addLetter",
+    "addSpace", "deleteLast",
+    "clearText", "resetSession"
   ];
 
   const elements = {};
@@ -97,6 +89,8 @@ function setup(options = {}) {
   });
 
   const stream = createCameraStream();
+  const timers = new Map();
+  const windowEvents = new Map();
 
   let timerId = 0;
 
@@ -124,41 +118,45 @@ function setup(options = {}) {
     },
 
     window: {
-      addEventListener() {}
+      addEventListener(event, callback) {
+        windowEvents.set(event, callback);
+      }
     },
 
-    fetch: async () => ({
+    fetch: options.fetch || (async () => ({
       ok: true,
-
       async json() {
         return { ready: true };
       }
-    }),
+    })),
 
     AbortController,
     FormData,
     performance,
     console,
 
-    setTimeout() {
-      return ++timerId;
+    setTimeout(callback, delay) {
+      const id = ++timerId;
+      timers.set(id, { callback, delay });
+      return id;
     },
 
-    clearTimeout() {}
+    clearTimeout(id) {
+      timers.delete(id);
+    }
   };
 
   vm.createContext(sandbox);
-
   vm.runInContext(source, sandbox);
 
   return {
     elements,
     stream,
-    sandbox
+    sandbox,
+    timers,
+    windowEvents
   };
 }
-
-// Simulate two consecutive predictions.
 
 function recognize(sandbox, letter) {
   const result = {
@@ -171,342 +169,234 @@ function recognize(sandbox, letter) {
   sandbox.displayRecognitionResult(result);
 }
 
-// TEST 1: Initial application state
+module.exports = {
+  setup,
+  recognize,
+  createCameraStream
+};
 
-test("Initial controls have correct states", () => {
-  const { elements } = setup();
+if (require.main === module) {
 
-  assert.equal(
-    elements.cameraStatus.textContent,
-    "Camera Off"
-  );
+  test("Initial controls have correct states", () => {
+    const { elements: e } = setup();
 
-  assert.equal(
-    elements.transcript.textContent,
-    "No translation yet"
-  );
-
-  assert.equal(elements.startCamera.disabled, false);
-  assert.equal(elements.stopCamera.disabled, true);
-  assert.equal(elements.addLetter.disabled, true);
-  assert.equal(elements.addSpace.disabled, true);
-  assert.equal(elements.deleteLast.disabled, true);
-  assert.equal(elements.clearText.disabled, true);
-});
-
-// TEST 2: Add a recognized letter
-
-test("Recognized letter is added to transcript", () => {
-  const { elements, sandbox } = setup();
-
-  recognize(sandbox, "A");
-
-  elements.addLetter.click();
-
-  assert.equal(
-    elements.transcript.textContent,
-    "A"
-  );
-
-  assert.equal(elements.addSpace.disabled, false);
-  assert.equal(elements.deleteLast.disabled, false);
-  assert.equal(elements.clearText.disabled, false);
-});
-
-// TEST 3: Add spaces between letters
-
-test("Transcript supports spaces between letters", () => {
-  const { elements, sandbox } = setup();
-
-  recognize(sandbox, "A");
-  elements.addLetter.click();
-
-  elements.addSpace.click();
-
-  recognize(sandbox, "B");
-  elements.addLetter.click();
-
-  assert.equal(
-    elements.transcript.textContent,
-    "A B"
-  );
-});
-
-// TEST 4: Prevent extra spaces
-
-test("Leading and repeated spaces are prevented", () => {
-  const { elements, sandbox } = setup();
-
-  elements.addSpace.click();
-
-  assert.equal(
-    elements.transcript.textContent,
-    "No translation yet"
-  );
-
-  recognize(sandbox, "A");
-
-  elements.addLetter.click();
-  elements.addSpace.click();
-  elements.addSpace.click();
-
-  assert.equal(
-    elements.transcript.textContent,
-    "A "
-  );
-
-  assert.equal(elements.addSpace.disabled, true);
-});
-
-// TEST 5: Delete the last character
-
-test("Delete Last removes one character", () => {
-  const { elements, sandbox } = setup();
-
-  recognize(sandbox, "A");
-  elements.addLetter.click();
-
-  recognize(sandbox, "B");
-  elements.addLetter.click();
-
-  elements.deleteLast.click();
-
-  assert.equal(
-    elements.transcript.textContent,
-    "A"
-  );
-});
-
-// TEST 6: Clear the transcript
-
-test("Clear Transcript removes all text", () => {
-  const { elements, sandbox } = setup();
-
-  recognize(sandbox, "C");
-
-  elements.addLetter.click();
-  elements.clearText.click();
-
-  assert.equal(
-    elements.transcript.textContent,
-    "No translation yet"
-  );
-
-  assert.equal(elements.deleteLast.disabled, true);
-  assert.equal(elements.clearText.disabled, true);
-});
-
-// TEST 7: Stable recognition is required
-
-test("Letter requires two consecutive predictions", () => {
-  const { elements, sandbox } = setup();
-
-  sandbox.displayRecognitionResult({
-    status: "recognized",
-    letter: "L",
-    confidence: 0.95
+    assert.equal(e.cameraStatus.textContent, "Camera Off");
+    assert.equal(e.transcript.textContent, "No translation yet");
+    assert.equal(e.startCamera.disabled, false);
+    assert.equal(e.stopCamera.disabled, true);
+    assert.equal(e.addLetter.disabled, true);
+    assert.equal(e.addSpace.disabled, true);
+    assert.equal(e.deleteLast.disabled, true);
+    assert.equal(e.clearText.disabled, true);
   });
 
-  assert.equal(elements.addLetter.disabled, true);
+  test("Recognized letter is added to transcript", () => {
+    const { elements: e, sandbox } = setup();
 
-  sandbox.displayRecognitionResult({
-    status: "recognized",
-    letter: "L",
-    confidence: 0.95
+    recognize(sandbox, "A");
+    e.addLetter.click();
+
+    assert.equal(e.transcript.textContent, "A");
+    assert.equal(e.addSpace.disabled, false);
+    assert.equal(e.deleteLast.disabled, false);
+    assert.equal(e.clearText.disabled, false);
   });
 
-  assert.equal(elements.addLetter.disabled, false);
+  test("Transcript supports spaces between letters", () => {
+    const { elements: e, sandbox } = setup();
 
-  assert.equal(
-    elements.detectedLetter.textContent,
-    "L"
-  );
-});
+    recognize(sandbox, "A");
+    e.addLetter.click();
+    e.addSpace.click();
 
-// TEST 8: Unsupported letters are rejected
+    recognize(sandbox, "B");
+    e.addLetter.click();
 
-test("Unsupported letters cannot be added", () => {
-  const { elements, sandbox } = setup();
-
-  recognize(sandbox, "Z");
-
-  elements.addLetter.click();
-
-  assert.equal(elements.addLetter.disabled, true);
-
-  assert.equal(
-    elements.transcript.textContent,
-    "No translation yet"
-  );
-});
-
-// TEST 9: Invalid confidence is rejected
-
-test("Invalid confidence does not enable Add Letter", () => {
-  const { elements, sandbox } = setup();
-
-  sandbox.displayRecognitionResult({
-    status: "recognized",
-    letter: "Y",
-    confidence: 2
+    assert.equal(e.transcript.textContent, "A B");
   });
 
-  assert.equal(elements.addLetter.disabled, true);
+  test("Leading and repeated spaces are prevented", () => {
+    const { elements: e, sandbox } = setup();
 
-  assert.equal(
-    elements.detectedLetter.textContent,
-    "—"
-  );
-});
+    e.addSpace.click();
+    assert.equal(e.transcript.textContent, "No translation yet");
 
-// TEST 10: No-hand detection resets recognition
+    recognize(sandbox, "A");
+    e.addLetter.click();
+    e.addSpace.click();
+    e.addSpace.click();
 
-test("No hand disables the current letter", () => {
-  const { elements, sandbox } = setup();
-
-  recognize(sandbox, "Y");
-
-  sandbox.displayRecognitionResult({
-    status: "no_hand"
+    assert.equal(e.transcript.textContent, "A ");
+    assert.equal(e.addSpace.disabled, true);
   });
 
-  assert.equal(elements.addLetter.disabled, true);
+  test("Delete Last removes one character", () => {
+    const { elements: e, sandbox } = setup();
 
-  assert.equal(
-    elements.recognitionStatus.textContent,
-    "Show one hand to the camera"
-  );
-});
+    recognize(sandbox, "A");
+    e.addLetter.click();
 
-// TEST 11: Start and stop the camera
+    recognize(sandbox, "B");
+    e.addLetter.click();
 
-test("Camera starts and releases its tracks when stopped", async () => {
-  const { elements, stream } = setup();
+    e.deleteLast.click();
 
-  await elements.startCamera.click();
-
-  assert.equal(
-    elements.cameraStatus.textContent,
-    "Camera Active"
-  );
-
-  assert.equal(elements.startCamera.disabled, true);
-  assert.equal(elements.stopCamera.disabled, false);
-
-  elements.stopCamera.click();
-
-  assert.equal(
-    elements.cameraStatus.textContent,
-    "Camera Off"
-  );
-
-  assert.equal(stream.track.stopped, true);
-  assert.equal(elements.camera.srcObject, null);
-});
-
-// TEST 12: Camera stop preserves text
-
-test("Stopping the camera preserves the transcript", async () => {
-  const { elements, sandbox } = setup();
-
-  await elements.startCamera.click();
-
-  recognize(sandbox, "A");
-
-  elements.addLetter.click();
-  elements.stopCamera.click();
-
-  assert.equal(
-    elements.transcript.textContent,
-    "A"
-  );
-});
-
-// TEST 13: Reset the session
-
-test("Reset Session stops camera and clears transcript", async () => {
-  const { elements, stream, sandbox } = setup();
-
-  await elements.startCamera.click();
-
-  recognize(sandbox, "B");
-
-  elements.addLetter.click();
-  elements.resetSession.click();
-
-  assert.equal(
-    elements.transcript.textContent,
-    "No translation yet"
-  );
-
-  assert.equal(
-    elements.cameraStatus.textContent,
-    "Camera Off"
-  );
-
-  assert.equal(stream.track.stopped, true);
-  assert.equal(elements.addLetter.disabled, true);
-});
-
-// TEST 14: Camera permission denied
-
-test("Camera permission denial is handled", async () => {
-  const error = new Error("Permission denied");
-  error.name = "NotAllowedError";
-
-  const { elements } = setup({
-    getUserMedia: async () => {
-      throw error;
-    }
+    assert.equal(e.transcript.textContent, "A");
   });
 
-  await elements.startCamera.click();
+  test("Clear Transcript removes all text", () => {
+    const { elements: e, sandbox } = setup();
 
-  assert.equal(
-    elements.cameraStatus.textContent,
-    "Camera Error"
-  );
+    recognize(sandbox, "C");
+    e.addLetter.click();
+    e.clearText.click();
 
-  assert.match(
-    elements.errorMessage.textContent,
-    /Camera access denied/
-  );
-
-  assert.equal(elements.startCamera.disabled, false);
-});
-
-// TEST 15: Reset during pending camera permission
-
-test("Reset safely cancels a pending camera request", async () => {
-  let resolvePermission;
-
-  const pendingPermission = new Promise(resolve => {
-    resolvePermission = resolve;
+    assert.equal(e.transcript.textContent, "No translation yet");
+    assert.equal(e.deleteLast.disabled, true);
+    assert.equal(e.clearText.disabled, true);
   });
 
-  const lateStream = createCameraStream();
+  test("Letter requires two consecutive predictions", () => {
+    const { elements: e, sandbox } = setup();
 
-  const { elements } = setup({
-    getUserMedia: () => pendingPermission
+    const result = {
+      status: "recognized",
+      letter: "L",
+      confidence: 0.95
+    };
+
+    sandbox.displayRecognitionResult(result);
+    assert.equal(e.addLetter.disabled, true);
+
+    sandbox.displayRecognitionResult(result);
+    assert.equal(e.addLetter.disabled, false);
+    assert.equal(e.detectedLetter.textContent, "L");
   });
 
-  const starting = elements.startCamera.click();
+  test("Unsupported letters cannot be added", () => {
+    const { elements: e, sandbox } = setup();
 
-  elements.resetSession.click();
+    recognize(sandbox, "Z");
+    e.addLetter.click();
 
-  assert.equal(elements.startCamera.disabled, true);
+    assert.equal(e.addLetter.disabled, true);
+    assert.equal(e.transcript.textContent, "No translation yet");
+  });
 
-  resolvePermission(lateStream);
+  test("Invalid confidence is rejected", () => {
+    const { elements: e, sandbox } = setup();
 
-  await starting;
+    sandbox.displayRecognitionResult({
+      status: "recognized",
+      letter: "Y",
+      confidence: 2
+    });
 
-  assert.equal(lateStream.track.stopped, true);
+    assert.equal(e.addLetter.disabled, true);
+    assert.equal(e.detectedLetter.textContent, "—");
+  });
 
-  assert.equal(
-    elements.cameraStatus.textContent,
-    "Camera Off"
-  );
+  test("No hand disables the current letter", () => {
+    const { elements: e, sandbox } = setup();
 
-  assert.equal(elements.camera.srcObject, null);
-  assert.equal(elements.startCamera.disabled, false);
-});
+    recognize(sandbox, "Y");
+
+    sandbox.displayRecognitionResult({
+      status: "no_hand"
+    });
+
+    assert.equal(e.addLetter.disabled, true);
+    assert.equal(
+      e.recognitionStatus.textContent,
+      "Show one hand to the camera"
+    );
+  });
+
+  test("Camera starts and releases tracks when stopped", async () => {
+    const { elements: e, stream } = setup();
+
+    await e.startCamera.click();
+
+    assert.equal(e.cameraStatus.textContent, "Camera Active");
+    assert.equal(e.startCamera.disabled, true);
+    assert.equal(e.stopCamera.disabled, false);
+
+    e.stopCamera.click();
+
+    assert.equal(e.cameraStatus.textContent, "Camera Off");
+    assert.equal(stream.track.stopped, true);
+    assert.equal(e.camera.srcObject, null);
+  });
+
+  test("Stopping camera preserves the transcript", async () => {
+    const { elements: e, sandbox } = setup();
+
+    await e.startCamera.click();
+
+    recognize(sandbox, "A");
+    e.addLetter.click();
+    e.stopCamera.click();
+
+    assert.equal(e.transcript.textContent, "A");
+  });
+
+  test("Reset Session stops camera and clears transcript", async () => {
+    const { elements: e, sandbox, stream } = setup();
+
+    await e.startCamera.click();
+
+    recognize(sandbox, "B");
+    e.addLetter.click();
+    e.resetSession.click();
+
+    assert.equal(e.transcript.textContent, "No translation yet");
+    assert.equal(e.cameraStatus.textContent, "Camera Off");
+    assert.equal(stream.track.stopped, true);
+    assert.equal(e.addLetter.disabled, true);
+  });
+
+  test("Camera permission denial is handled", async () => {
+    const error = new Error("Permission denied");
+    error.name = "NotAllowedError";
+
+    const { elements: e } = setup({
+      getUserMedia: async () => {
+        throw error;
+      }
+    });
+
+    await e.startCamera.click();
+
+    assert.equal(e.cameraStatus.textContent, "Camera Error");
+    assert.match(e.errorMessage.textContent, /Camera access denied/);
+    assert.equal(e.startCamera.disabled, false);
+  });
+
+  test("Reset cancels a pending camera request", async () => {
+    let resolvePermission;
+
+    const pending = new Promise(resolve => {
+      resolvePermission = resolve;
+    });
+
+    const lateStream = createCameraStream();
+
+    const { elements: e } = setup({
+      getUserMedia: () => pending
+    });
+
+    const starting = e.startCamera.click();
+
+    e.resetSession.click();
+
+    assert.equal(e.startCamera.disabled, true);
+
+    resolvePermission(lateStream);
+    await starting;
+
+    assert.equal(lateStream.track.stopped, true);
+    assert.equal(e.cameraStatus.textContent, "Camera Off");
+    assert.equal(e.camera.srcObject, null);
+    assert.equal(e.startCamera.disabled, false);
+  });
+}
