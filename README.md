@@ -1,3 +1,4 @@
+
 # CSCE3444_Project
 
 Group 8
@@ -16,6 +17,28 @@ Current Status: Initial project planning and repository setup completed.
 Intial recognition status: "A, B, C, L, Y"
 Needs more testing of these letters.
 Models has to be trained on the rest of the letters.
+
+Current Development Update: Frontend, backend, and machine learning model integration completed. Additional frontend features and testing have been implemented for the final demonstration.
+
+**Implemented Features:**
+
+1. Live camera preview with Start Camera and Stop Camera controls.
+2. Real-time recognition of supported ASL letters with confidence display.
+3. Add Letter, Add Space, Delete Last, and Clear Transcript functionality.
+4. Reset Session functionality to stop the camera and clear the transcript.
+5. Copy Transcript and Download TXT functionality.
+6. Character and word count for the translation transcript.
+7. Responsive layout for desktop and mobile browsers.
+8. Improved accessibility, keyboard navigation, and camera error handling.
+
+**Testing:**
+
+1. Added 47 automated frontend test cases for camera controls, recognition, transcript editing, accessibility, and transcript export.
+2. Added GitHub Actions to run automated frontend tests.
+3. Added smoke tests to check application availability, model health, and invalid image handling.
+4. Final webcam testing is required to verify recognition accuracy.
+
+GitHub Actions Link: https://github.com/g-allu/Group08_CSCE3444-FA26/actions
 
 # Setup Instructions:
 
@@ -57,3 +80,4 @@ Live demo: _add the `onrender.com` URL here after the first deploy_
 3. Wait for the deploy log to show the service is live, then open the URL Render gives you.
 
 Every push to `main` redeploys automatically. The free service sleeps after 15 idle minutes, so the first visit after that takes about a minute to load. Open the link once before a demo.
+
