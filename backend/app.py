@@ -2,10 +2,11 @@
 
 import argparse
 import io
+import os
 import signal
 from pathlib import Path
 
-from flask import Flask, Request, jsonify, request, send_from_directory
+from flask import Flask, Request, jsonify, request, send_from_directory, session
 from PIL import Image, UnidentifiedImageError
 
 from .model_service import ModelService, ModelUnavailable
@@ -13,6 +14,7 @@ from .translator import Translator
 
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
 MAX_IMAGE_PIXELS = 4_000_000
+MAX_TRANSCRIPT_LENGTH = 2000
 
 
 class MemoryUploadRequest(Request):
@@ -25,14 +27,30 @@ class MemoryUploadRequest(Request):
 def create_app(config=None, model_service=None):
     app = Flask(__name__, static_folder=None)
     app.request_class = MemoryUploadRequest
-    app.config.from_mapping(MAX_CONTENT_LENGTH=2 * 1024 * 1024)
+    app.config.from_mapping(
+        MAX_CONTENT_LENGTH=2 * 1024 * 1024,
+        SECRET_KEY=os.environ.get("FLASK_SECRET_KEY") or os.urandom(32),
+        SESSION_COOKIE_HTTPONLY=True,
+        SESSION_COOKIE_SAMESITE="Lax",
+    )
     if config:
         app.config.update(config)
 
     service = model_service if model_service is not None else ModelService()
     app.extensions["model_service"] = service
-    translator = Translator()
-    app.extensions["translator"] = translator
+
+    # Store transcript text in each browser's signed session cookie, rather
+    # than sharing one Translator instance across all clients.
+    def current_translator():
+        translator = Translator()
+        saved = session.get("transcript", "")
+        if isinstance(saved, str):
+            translator.transcript = saved[:MAX_TRANSCRIPT_LENGTH]
+        return translator
+
+    def save_transcript(translator):
+        session["transcript"] = translator.get_transcript()
+        return jsonify(transcript=translator.get_transcript())
 
     @app.get("/api/health")
     def health():
@@ -82,26 +100,37 @@ def create_app(config=None, model_service=None):
         data = request.get_json(silent=True)
         if not isinstance(data, dict):
             return jsonify(error="JSON object required"), 400
+        translator = current_translator()
+        if len(translator.get_transcript()) >= MAX_TRANSCRIPT_LENGTH:
+            return jsonify(error="Transcript length limit reached"), 413
         result = translator.add_letter(data.get("letter"))
         if result is None:
             return jsonify(error="Enter one letter A-Z"), 400
-        return jsonify(transcript=result)
+        return save_transcript(translator)
 
     @app.post("/api/add-space")
     def add_space():
-        return jsonify(transcript=translator.add_space())
+        translator = current_translator()
+        if len(translator.get_transcript()) >= MAX_TRANSCRIPT_LENGTH:
+            return jsonify(error="Transcript length limit reached"), 413
+        translator.add_space()
+        return save_transcript(translator)
 
     @app.post("/api/delete-last")
     def delete_last():
-        return jsonify(transcript=translator.delete_last())
+        translator = current_translator()
+        translator.delete_last()
+        return save_transcript(translator)
 
     @app.post("/api/reset")
     def reset():
-        return jsonify(transcript=translator.reset())
+        translator = current_translator()
+        translator.reset()
+        return save_transcript(translator)
 
     @app.get("/api/transcript")
     def get_transcript():
-        return jsonify(transcript=translator.get_transcript())
+        return jsonify(transcript=current_translator().get_transcript())
 
     @app.get("/")
     def home():
