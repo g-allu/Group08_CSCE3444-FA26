@@ -22,11 +22,13 @@ os.environ.setdefault("MPLCONFIGDIR", str(ROOT / "artifacts/matplotlib"))
 
 import joblib
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageOps
 from scipy.fft import dctn
-from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report, confusion_matrix
 from sklearn.model_selection import StratifiedGroupKFold
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.svm import SVC
 
 if __package__:
     from .download_data import LANDMARKER, MANIFEST, PARQUET, download, sha256
@@ -37,16 +39,18 @@ else:
 MOTION_LETTERS = ("J", "Z")
 LETTERS = tuple(chr(code) for code in range(ord("A"), ord("Z") + 1) if chr(code) not in MOTION_LETTERS)
 CLASSES = LETTERS
-FEATURE_VERSION = "world-wrist-relative-middle-mcp-scale-v1"
-MODEL_FEATURE_VERSION = "landmarks-plus-tip-distances-joint-angles-v1"
+# v2 retries hand detection on a padded copy when the first pass finds no hand.
+FEATURE_VERSION = "world-wrist-relative-middle-mcp-scale-padded-retry-v2"
+MODEL_FEATURE_VERSION = "landmarks-plus-tip-distances-joint-angles-orientation-v2"
 MIN_THRESHOLD = 0.5
-TARGET_PRECISION = 0.95
+TARGET_PRECISION = 0.98
 FEATURES = ROOT / "data/processed/features.npz"
 SPLITS = ROOT / "data/processed/splits.json"
 MODEL = ROOT / "artifacts/asl_alphabet.joblib"
 REPORTS = ROOT / "reports"
 SEED = 42
 NEAR_DUPLICATE_DISTANCE = 4
+RETRY_PADDING = 0.5
 
 
 def write_json(path: Path, value: dict) -> None:
@@ -76,7 +80,9 @@ def model_features(features: np.ndarray) -> np.ndarray:
 
     Fingertip spacing, finger bend angles, and thumb placement separate similar
     letters (for example M, N, S, T, A, and E) far better than raw coordinates.
-    Rows with missing landmarks stay NaN.
+    Finger directions and palm orientation separate letters that share a shape
+    but point differently (K and P, G and Q, U and H). Rows with missing
+    landmarks stay NaN.
     """
     features = np.asarray(features, dtype=np.float64)
     points = features.reshape(-1, 21, 3)
@@ -91,7 +97,21 @@ def model_features(features: np.ndarray) -> np.ndarray:
             lengths = np.linalg.norm(before, axis=1) * np.linalg.norm(after, axis=1)
             columns.append((before * after).sum(axis=1) / np.maximum(lengths, 1e-8))
     columns.extend(np.linalg.norm(points[:, 4] - points[:, index], axis=1) for index in THUMB_TARGETS)
-    return np.hstack([features, np.stack(columns, axis=1)]).astype(np.float32)
+
+    def unit(vectors):
+        return vectors / np.maximum(np.linalg.norm(vectors, axis=-1, keepdims=True), 1e-8)
+
+    directions = [unit(points[:, tip] - points[:, base]) for base, tip in ((2, 4), (5, 8), (9, 12), (13, 16), (17, 20))]
+    palm_normal = unit(np.cross(points[:, 5] - points[:, 0], points[:, 17] - points[:, 0]))
+    # Sign shows whether the index and middle fingers cross (R).
+    crossing = (palm_normal * np.cross(points[:, 8] - points[:, 5], points[:, 12] - points[:, 9])).sum(axis=1)
+    columns.append(crossing)
+    columns.extend((points[:, tip] * palm_normal).sum(axis=1) for tip in FINGERTIPS)
+    columns.extend(
+        np.linalg.norm(points[:, 4] - (points[:, first] + points[:, second]) / 2, axis=1)
+        for first, second in ((6, 10), (10, 14), (14, 18))
+    )
+    return np.hstack([features, np.stack(columns, axis=1), *directions, palm_normal]).astype(np.float32)
 
 
 def mirror_landmarks(features: np.ndarray) -> np.ndarray:
@@ -170,7 +190,25 @@ class HandExtractor(AbstractContextManager):
         self.detector = vision.HandLandmarker.create_from_options(options)
 
     def extract(self, image: Image.Image) -> tuple[np.ndarray | None, str]:
-        pixels = np.ascontiguousarray(image.convert("RGB"), dtype=np.uint8)
+        feature, status, _ = self.extract_detailed(image)
+        return feature, status
+
+    def extract_detailed(self, image: Image.Image) -> tuple[np.ndarray | None, str, bool]:
+        """Detect one hand; retry with a black border when a close-up hand is missed.
+
+        The palm detector often misses hands that fill the frame. Padding shrinks
+        the hand relative to the image and recovers many of those cases.
+        """
+        image = image.convert("RGB")
+        feature, status = self._detect(image)
+        if status != "no_hand":
+            return feature, status, False
+        border = max(1, round(max(image.size) * RETRY_PADDING))
+        feature, status = self._detect(ImageOps.expand(image, border=border, fill=(0, 0, 0)))
+        return feature, status, status == "ok"
+
+    def _detect(self, image: Image.Image) -> tuple[np.ndarray | None, str]:
+        pixels = np.ascontiguousarray(image, dtype=np.uint8)
         result = self.detector.detect(self.mp.Image(image_format=self.mp.ImageFormat.SRGB, data=pixels))
         if not result.hand_world_landmarks:
             return None, "no_hand"
@@ -199,15 +237,16 @@ def source_rows():
 
 
 def extract_features() -> None:
-    rows, features, labels, statuses, digests, hashes = [], [], [], [], [], []
+    rows, features, labels, statuses, digests, hashes, padded = [], [], [], [], [], [], []
     start = time.perf_counter()
     with HandExtractor() as extractor:
         for index, letter, content in source_rows():
             with Image.open(io.BytesIO(content)) as image:
                 image = image.convert("RGB")
                 phash = perceptual_hash(image)
-                feature, status = extractor.extract(image)
+                feature, status, used_padding = extractor.extract_detailed(image)
             rows.append(index)
+            padded.append(used_padding)
             labels.append(letter)
             hashes.append(phash)
             digests.append(hashlib.sha256(content).hexdigest())
@@ -220,7 +259,7 @@ def extract_features() -> None:
     FEATURES.parent.mkdir(parents=True, exist_ok=True)
     np.savez_compressed(
         FEATURES, features=np.asarray(features), rows=np.asarray(rows), labels=np.asarray(labels),
-        statuses=np.asarray(statuses), groups=groups, digests=np.asarray(digests),
+        statuses=np.asarray(statuses), padded=np.asarray(padded), groups=groups, digests=np.asarray(digests),
         phashes=np.asarray(hashes, dtype=np.uint64), feature_version=FEATURE_VERSION,
         source_sha256=sha256(PARQUET), landmarker_sha256=sha256(LANDMARKER),
     )
@@ -230,6 +269,7 @@ def extract_features() -> None:
     }
     summary = {
         "images": len(rows), "statuses": dict(Counter(statuses)), "by_source_letter": counts,
+        "recovered_with_padding": int(sum(padded)),
         "duplicate_groups": len(set(groups.tolist())), "phash_max_distance": NEAR_DUPLICATE_DISTANCE,
         "extraction_seconds": round(time.perf_counter() - start, 2),
         "feature_version": FEATURE_VERSION,
@@ -330,16 +370,13 @@ def train_model() -> None:
     train = train[np.isfinite(data["features"][train]).all(axis=1)]
     if set(y[train]) != set(CLASSES):
         raise ValueError("Training data has no detected hands for one or more classes")
-    model = RandomForestClassifier(
-        n_estimators=300, max_depth=20, min_samples_leaf=2,
-        class_weight="balanced", random_state=SEED, n_jobs=-1,
-    )
+    # An RBF SVM matched the forest's precision with higher recall at a fraction of the size.
+    model = make_pipeline(StandardScaler(), SVC(C=10, gamma="scale", probability=True, random_state=SEED))
     print(f"Training on {len(train):,} detected hands: {dict(Counter(y[train]))}", flush=True)
     start = time.perf_counter()
     features = data["features"][train]
     # Mirrored copies stay in the training split, so validation and test remain unseen.
     model.fit(model_features(np.vstack([features, mirror_landmarks(features)])), np.concatenate([y[train], y[train]]))
-    model.n_jobs = 1
     val = splits["validation"]
     threshold, qualified, trials = select_threshold(model, data["features"][val], y[val])
     manifest = {
@@ -357,7 +394,7 @@ def train_model() -> None:
         "source": json.loads(MANIFEST.read_text()), "split_manifest_sha256": sha256(SPLITS),
         "feature_cache_sha256": sha256(FEATURES), "python": platform.python_version(),
         "dependencies": {name: version(name) for name in ("mediapipe", "scikit-learn", "numpy", "joblib", "Pillow", "pyarrow", "opencv-contrib-python")},
-        "forest": model.get_params(), "training_samples": len(train), "training_rows_with_mirrors": 2 * len(train),
+        "classifier": {"type": "StandardScaler + SVC", **{key: value for key, value in model[-1].get_params().items() if key != "random_state"}, "random_state": SEED}, "training_samples": len(train), "training_rows_with_mirrors": 2 * len(train),
         "training_seconds": round(time.perf_counter() - start, 2),
     }
     MODEL.parent.mkdir(parents=True, exist_ok=True)
