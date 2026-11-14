@@ -132,7 +132,7 @@ function setup(options = {}) {
 
     AbortController,
     FormData,
-    performance,
+    performance: createClock(),
     console,
 
     setTimeout(callback, delay) {
@@ -158,6 +158,33 @@ function setup(options = {}) {
   };
 }
 
+// Fake clock so recognition timing is deterministic. Tests move time forward
+// with sandbox.performance.advance(ms).
+function createClock() {
+  let time = 0;
+
+  return {
+    now() {
+      return time;
+    },
+
+    advance(ms) {
+      time += ms;
+      return time;
+    }
+  };
+}
+
+// The app sends a frame every 200 ms at most.
+const FRAME_MS = 200;
+
+// Send one response FRAME_MS after the previous one.
+function sendFrame(sandbox, result) {
+  sandbox.performance.advance(FRAME_MS);
+  sandbox.displayRecognitionResult(result);
+}
+
+// Hold a letter long enough for the vote window to lock it in.
 function recognize(sandbox, letter) {
   const result = {
     status: "recognized",
@@ -165,13 +192,16 @@ function recognize(sandbox, letter) {
     confidence: 0.95
   };
 
-  sandbox.displayRecognitionResult(result);
-  sandbox.displayRecognitionResult(result);
+  for (let frame = 0; frame < 4; frame++) {
+    sendFrame(sandbox, result);
+  }
 }
 
 module.exports = {
   setup,
   recognize,
+  sendFrame,
+  FRAME_MS,
   createCameraStream
 };
 
@@ -256,7 +286,7 @@ if (require.main === module) {
     assert.equal(e.clearText.disabled, true);
   });
 
-  test("Letter requires two consecutive predictions", () => {
+  test("Letter locks in once the vote window agrees", () => {
     const { elements: e, sandbox } = setup();
 
     const result = {
@@ -265,10 +295,13 @@ if (require.main === module) {
       confidence: 0.95
     };
 
-    sandbox.displayRecognitionResult(result);
+    sendFrame(sandbox, result);
+    sendFrame(sandbox, result);
     assert.equal(e.addLetter.disabled, true);
+    assert.equal(e.recognitionStatus.textContent, "Hold the sign steady");
 
-    sandbox.displayRecognitionResult(result);
+    // Third frame: the 800 ms window is half full, so L locks in.
+    sendFrame(sandbox, result);
     assert.equal(e.addLetter.disabled, false);
     assert.equal(e.detectedLetter.textContent, "L");
   });
@@ -296,14 +329,14 @@ if (require.main === module) {
     assert.equal(e.detectedLetter.textContent, "—");
   });
 
-  test("No hand disables the current letter", () => {
+  test("No hand disables the current letter after the hold period", () => {
     const { elements: e, sandbox } = setup();
 
     recognize(sandbox, "Y");
 
-    sandbox.displayRecognitionResult({
-      status: "no_hand"
-    });
+    for (let frame = 0; frame < 4; frame++) {
+      sendFrame(sandbox, { status: "no_hand" });
+    }
 
     assert.equal(e.addLetter.disabled, true);
     assert.equal(

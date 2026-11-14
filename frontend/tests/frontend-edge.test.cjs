@@ -5,6 +5,7 @@ const assert = require("node:assert/strict");
 const {
   setup,
   recognize,
+  sendFrame,
   createCameraStream
 } = require("./frontend.test.cjs");
 
@@ -123,53 +124,87 @@ test("Stable recognition does not repeat unchanged announcements", () => {
   );
 });
 
-// TEST 3: Different letters require fresh confirmation.
+// TEST 3: A different letter replaces the current one only after winning the window.
 
-test("A different prediction requires two matching frames", () => {
+test("A different prediction must win the vote window", () => {
   const { elements: e, sandbox } = setup();
 
   recognize(sandbox, "A");
 
+  assert.equal(e.detectedLetter.textContent, "A");
+
+  sendFrame(sandbox, prediction("B"));
+
+  // One B frame is not enough to replace A.
+  assert.equal(e.detectedLetter.textContent, "A");
   assert.equal(e.addLetter.disabled, false);
 
-  sandbox.displayRecognitionResult(
-    prediction("B")
-  );
-
-  assert.equal(e.addLetter.disabled, true);
-  assert.equal(e.detectedLetter.textContent, "—");
-
-  sandbox.displayRecognitionResult(
-    prediction("B")
-  );
+  sendFrame(sandbox, prediction("B"));
+  sendFrame(sandbox, prediction("B"));
 
   assert.equal(e.addLetter.disabled, false);
   assert.equal(e.detectedLetter.textContent, "B");
 });
 
-// TEST 4: No-hand detection clears previous recognition.
+// TEST 4: A short dropout keeps the letter; a long one clears it.
 
-test("Removing the hand resets prediction stability", () => {
+test("Letter survives a short dropout and clears after a long one", () => {
   const { elements: e, sandbox } = setup();
 
   recognize(sandbox, "C");
 
-  sandbox.displayRecognitionResult({
-    status: "no_hand"
-  });
+  sendFrame(sandbox, { status: "no_hand" });
+  sendFrame(sandbox, { status: "no_hand" });
 
-  sandbox.displayRecognitionResult(
-    prediction("C")
+  // 400 ms without C is within the 600 ms hold.
+  assert.equal(e.detectedLetter.textContent, "C");
+  assert.equal(e.addLetter.disabled, false);
+  assert.equal(
+    e.recognitionStatus.textContent,
+    "Show one hand to the camera"
   );
 
+  sendFrame(sandbox, { status: "no_hand" });
+  sendFrame(sandbox, { status: "no_hand" });
+
+  // 800 ms without C clears it.
+  assert.equal(e.detectedLetter.textContent, "—");
   assert.equal(e.addLetter.disabled, true);
 
-  sandbox.displayRecognitionResult(
-    prediction("C")
-  );
+  recognize(sandbox, "C");
 
   assert.equal(e.addLetter.disabled, false);
   assert.equal(e.detectedLetter.textContent, "C");
+});
+
+test("Single stray frames do not clear or flip the letter", () => {
+  const { elements: e, sandbox } = setup();
+
+  recognize(sandbox, "B");
+
+  for (const result of [
+    prediction("R", 0.6),
+    { status: "uncertain", confidence: 0.4 },
+    prediction("B"),
+    { status: "multiple_hands" },
+    prediction("B")
+  ]) {
+    sendFrame(sandbox, result);
+    assert.equal(e.detectedLetter.textContent, "B");
+    assert.equal(e.addLetter.disabled, false);
+  }
+});
+
+test("Alternating letters with no majority show nothing", () => {
+  const { elements: e, sandbox } = setup();
+
+  for (let frame = 0; frame < 10; frame++) {
+    sendFrame(sandbox, prediction(frame % 2 ? "N" : "M"));
+  }
+
+  assert.equal(e.detectedLetter.textContent, "—");
+  assert.equal(e.addLetter.disabled, true);
+  assert.equal(e.recognitionStatus.textContent, "Hold the sign steady");
 });
 
 // TEST 5: Recognition handles empty or malformed responses.

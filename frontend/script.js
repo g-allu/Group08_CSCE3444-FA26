@@ -31,6 +31,14 @@ const DEFAULT_LETTERS = ALPHABET.filter(
 
 let supportedLetters = new Set(DEFAULT_LETTERS);
 
+const VOTE_WINDOW_MS = 800;
+const HOLD_MS = 600;
+const MIN_SHARE = 0.6;
+const MIN_FRAMES = 3;
+
+let recentVotes = [];
+let lastSeenAt = 0;
+
 function lettersSummary(letters) {
   const sorted = [...letters].sort();
   const missing = ALPHABET.filter(letter => !letters.has(letter));
@@ -64,8 +72,6 @@ let cameraStream = null;
 let isStarting = false;
 let transcript = "";
 let currentLetter = "";
-let previousLetter = "";
-let consecutivePredictions = 0;
 let generation = 0;
 let recognitionTimer = null;
 let activeRequest = null;
@@ -115,8 +121,8 @@ function updateCameraButtons() {
 
 function resetRecognition(message = "Waiting for camera") {
   currentLetter = "";
-  previousLetter = "";
-  consecutivePredictions = 0;
+  recentVotes = [];
+  lastSeenAt = 0;
 
   setText(detectedLetter, "—");
   setText(confidenceText, "Recognition confidence: —");
@@ -125,7 +131,60 @@ function resetRecognition(message = "Waiting for camera") {
   updateTranscript();
 }
 
-function displayRecognitionResult(result) {
+// Pick the letter to show from the last VOTE_WINDOW_MS of responses instead
+// of reacting to every frame. One blurry or uncertain frame no longer blanks or
+// flips the letter. Tuned for the five requests per second sent below; the
+// standalone webcam uses the same rule (StablePrediction in ml/asl_model.py).
+function updateVotes(letter, confidence, now) {
+  recentVotes.push({ time: now, letter, confidence });
+
+  while (recentVotes[0].time <= now - VOTE_WINDOW_MS) {
+    recentVotes.shift();
+  }
+
+  const weights = new Map();
+  const counts = new Map();
+
+  for (const vote of recentVotes) {
+    if (vote.letter) {
+      weights.set(vote.letter, (weights.get(vote.letter) || 0) + vote.confidence);
+      counts.set(vote.letter, (counts.get(vote.letter) || 0) + 1);
+    }
+  }
+
+  let leader = "";
+  let total = 0;
+
+  for (const [candidate, weight] of weights) {
+    total += weight;
+
+    if (!leader || weight > weights.get(leader)) {
+      leader = candidate;
+    }
+  }
+
+  // A letter locks in once the window is half full and the letter leads the
+  // confidence-weighted vote and appears in at least half of the frames.
+  const locked =
+    leader !== "" &&
+    now - recentVotes[0].time >= VOTE_WINDOW_MS / 2 &&
+    weights.get(leader) / Math.max(total, 1e-9) >= MIN_SHARE &&
+    counts.get(leader) >= Math.max(MIN_FRAMES, recentVotes.length / 2);
+
+  if (locked && leader !== currentLetter) {
+    currentLetter = leader;
+    lastSeenAt = now;
+  } else if (currentLetter && letter === currentLetter) {
+    // The grace period counts from the last frame that showed the letter.
+    lastSeenAt = now;
+  }
+
+  if (currentLetter && now - lastSeenAt > HOLD_MS) {
+    currentLetter = "";
+  }
+}
+
+function displayRecognitionResult(result, now = performance.now()) {
   const messages = {
     no_hand: "Show one hand to the camera",
     multiple_hands: "Please show only one hand",
@@ -139,49 +198,49 @@ function displayRecognitionResult(result) {
     result.confidence >= 0 &&
     result.confidence <= 1;
 
-  if (
-    result?.status !== "recognized" ||
-    !supportedLetters.has(result?.letter) ||
-    !validConfidence
-  ) {
-    const message = Object.hasOwn(
-      messages,
-      result?.status
-    )
-      ? messages[result.status]
-      : "No valid letter detected";
+  const isVote =
+    result?.status === "recognized" &&
+    supportedLetters.has(result?.letter) &&
+    validConfidence;
 
-    resetRecognition(message);
+  // Known non-letter outcomes and unsupported letters count as empty votes,
+  // so a letter already shown survives them for up to HOLD_MS.
+  const isEmptyVote =
+    !isVote &&
+    (Object.hasOwn(messages, result?.status ?? "") ||
+      (result?.status === "recognized" &&
+        typeof result?.letter === "string" &&
+        validConfidence));
+
+  if (!isVote && !isEmptyVote) {
+    resetRecognition("No valid letter detected");
     return;
   }
 
-  if (result.letter === previousLetter) {
-    consecutivePredictions = Math.min(
-      consecutivePredictions + 1,
-      2
-    );
-  } else {
-    consecutivePredictions = 1;
-  }
-
-  previousLetter = result.letter;
-
-  currentLetter =
-    consecutivePredictions >= 2 ? result.letter : "";
+  updateVotes(
+    isVote ? result.letter : "",
+    isVote ? result.confidence : 0,
+    now
+  );
 
   setText(detectedLetter, currentLetter || "—");
 
   setText(
     confidenceText,
-    `Recognition confidence: ${Math.round(result.confidence * 100)}%`
+    isVote
+      ? `Recognition confidence: ${Math.round(result.confidence * 100)}%`
+      : "Recognition confidence: —"
   );
 
-  setText(
-    recognitionStatus,
-    currentLetter
-      ? "Letter ready. Click Add Letter"
-      : "Hold the sign steady"
-  );
+  let status = "Hold the sign steady";
+
+  if (!isVote) {
+    status = messages[result.status] || "No valid letter detected";
+  } else if (currentLetter) {
+    status = "Letter ready. Click Add Letter";
+  }
+
+  setText(recognitionStatus, status);
 
   updateTranscript();
 }
