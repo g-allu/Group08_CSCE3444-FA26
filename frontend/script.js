@@ -21,8 +21,44 @@ const resetSessionButton = document.getElementById("resetSession");
 const canvas = document.createElement("canvas");
 const context = canvas.getContext("2d");
 
-const supportedLetters = new Set(["A", "B", "C", "L", "Y"]);
-const modelReadyMessage = "Model ready: A, B, C, L, Y";
+const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+
+// J and Z are signed with motion, so the single-frame model leaves them out.
+// /api/health can replace this list when the model supports more letters.
+const DEFAULT_LETTERS = ALPHABET.filter(
+  letter => letter !== "J" && letter !== "Z"
+);
+
+let supportedLetters = new Set(DEFAULT_LETTERS);
+
+function lettersSummary(letters) {
+  const sorted = [...letters].sort();
+  const missing = ALPHABET.filter(letter => !letters.has(letter));
+
+  if (missing.length === 0) {
+    return "all 26 letters";
+  }
+
+  if (sorted.length <= 8) {
+    return sorted.join(", ");
+  }
+
+  return `${sorted.length} letters (all except ${missing.join(" and ")})`;
+}
+
+function lettersFromHealth(result) {
+  if (!Array.isArray(result?.letters)) {
+    return null;
+  }
+
+  const letters = new Set(
+    result.letters.filter(
+      letter => typeof letter === "string" && /^[A-Z]$/.test(letter)
+    )
+  );
+
+  return letters.size > 0 ? letters : null;
+}
 
 let cameraStream = null;
 let isStarting = false;
@@ -94,7 +130,7 @@ function displayRecognitionResult(result) {
     no_hand: "Show one hand to the camera",
     multiple_hands: "Please show only one hand",
     invalid_landmarks: "Hand unclear. Adjust your position",
-    uncertain: "Sign uncertain. Hold A, B, C, L, or Y clearly"
+    uncertain: "Sign uncertain. Hold the sign clearly and steady"
   };
 
   const validConfidence =
@@ -176,7 +212,12 @@ async function checkModel() {
     }
 
     if (checkId === modelCheckId) {
-      setText(modelStatus, modelReadyMessage);
+      supportedLetters = lettersFromHealth(result) || supportedLetters;
+
+      setText(
+        modelStatus,
+        `Model ready: ${lettersSummary(supportedLetters)}`
+      );
     }
   } catch (error) {
     if (checkId === modelCheckId) {

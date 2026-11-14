@@ -18,15 +18,70 @@ function prediction(letter, confidence = 0.95) {
 
 // TEST 1: All currently supported ASL letters.
 
-test("All five supported letters can be added", () => {
+const STATIC_LETTERS = "ABCDEFGHIKLMNOPQRSTUVWXY";
+
+test("All 24 static letters can be added", () => {
   const { elements: e, sandbox } = setup();
 
-  for (const letter of ["A", "B", "C", "L", "Y"]) {
+  for (const letter of STATIC_LETTERS) {
     recognize(sandbox, letter);
     e.addLetter.click();
   }
 
-  assert.equal(e.transcript.textContent, "ABCLY");
+  assert.equal(e.transcript.textContent, STATIC_LETTERS);
+});
+
+test("Motion letters J and Z cannot be added", () => {
+  const { elements: e, sandbox } = setup();
+
+  for (const letter of ["J", "Z"]) {
+    recognize(sandbox, letter);
+    e.addLetter.click();
+  }
+
+  assert.equal(e.transcript.textContent, "No translation yet");
+});
+
+test("Health letters replace the default list and ignore bad entries", async () => {
+  const { elements: e, sandbox } = setup({
+    fetch: async () => ({
+      ok: true,
+
+      async json() {
+        return { ready: true, letters: ["A", "B", "j", "ZZ", 7, "Z"] };
+      }
+    })
+  });
+
+  await sandbox.checkModel();
+
+  assert.equal(e.modelStatus.textContent, "Model ready: A, B, Z");
+
+  recognize(sandbox, "Z");
+  e.addLetter.click();
+  recognize(sandbox, "C");
+  e.addLetter.click();
+
+  assert.equal(e.transcript.textContent, "Z");
+});
+
+test("Health without a usable letter list keeps the default letters", async () => {
+  const { elements: e, sandbox } = setup({
+    fetch: async () => ({
+      ok: true,
+
+      async json() {
+        return { ready: true, letters: ["?", ""] };
+      }
+    })
+  });
+
+  await sandbox.checkModel();
+
+  assert.equal(
+    e.modelStatus.textContent,
+    "Model ready: 24 letters (all except J and Z)"
+  );
 });
 
 // TEST 2: Repeated predictions should not rewrite live regions.
@@ -279,7 +334,7 @@ test("Stale model status responses are ignored", async () => {
 
   assert.equal(
     e.modelStatus.textContent,
-    "Model ready: A, B, C, L, Y"
+    "Model ready: 24 letters (all except J and Z)"
   );
 
   resolveFirst({
@@ -294,6 +349,6 @@ test("Stale model status responses are ignored", async () => {
 
   assert.equal(
     e.modelStatus.textContent,
-    "Model ready: A, B, C, L, Y"
+    "Model ready: 24 letters (all except J and Z)"
   );
 });
