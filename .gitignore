@@ -61,3 +61,7 @@ Desktop.ini
 
 # Runtime logs
 *.log
+
+# Local translation history data
+backend/translation_history.json
+backend/translation_history.json.*.tmp
