@@ -101,9 +101,19 @@ function setup(options = {}) {
       },
 
       createElement() {
+        // Minimal canvas so recognizeFrame can capture a JPEG frame.
         return {
+          width: 0,
+          height: 0,
+
           getContext() {
-            return {};
+            return {
+              drawImage() {}
+            };
+          },
+
+          toBlob(callback, type) {
+            callback(new Blob(["frame"], { type }));
           }
         };
       }

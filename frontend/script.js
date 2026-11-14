@@ -54,6 +54,10 @@ function lettersSummary(letters) {
   return `${sorted.length} letters (all except ${missing.join(" and ")})`;
 }
 
+function modelReadyText() {
+  return `Model ready: ${lettersSummary(supportedLetters)}`;
+}
+
 function lettersFromHealth(result) {
   if (!Array.isArray(result?.letters)) {
     return null;
@@ -273,10 +277,7 @@ async function checkModel() {
     if (checkId === modelCheckId) {
       supportedLetters = lettersFromHealth(result) || supportedLetters;
 
-      setText(
-        modelStatus,
-        `Model ready: ${lettersSummary(supportedLetters)}`
-      );
+      setText(modelStatus, modelReadyText());
     }
   } catch (error) {
     if (checkId === modelCheckId) {
@@ -384,7 +385,7 @@ async function recognizeFrame(session) {
     modelCheckId++;
 
     setText(errorMessage, "");
-    setText(modelStatus, modelReadyMessage);
+    setText(modelStatus, modelReadyText());
 
     displayRecognitionResult(result);
   } catch (error) {

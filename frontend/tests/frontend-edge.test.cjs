@@ -387,3 +387,61 @@ test("Stale model status responses are ignored", async () => {
     "Model ready: 24 letters (all except J and Z)"
   );
 });
+
+// Regression: successful predictions must reach the recognition display.
+// A stale reference once made every successful response fall into the
+// "Recognition unavailable" retry path.
+
+test("Successful predictions from the server lock in a letter", async () => {
+  const requests = [];
+
+  const { elements: e, sandbox, timers } = setup({
+    fetch: async url => {
+      requests.push(url);
+
+      return {
+        ok: true,
+
+        async json() {
+          return url === "/api/predict"
+            ? { status: "recognized", letter: "D", confidence: 0.9 }
+            : { ready: true };
+        }
+      };
+    }
+  });
+
+  Object.assign(e.camera, {
+    videoWidth: 640,
+    videoHeight: 480,
+    readyState: 4
+  });
+
+  await e.startCamera.click();
+
+  // Run the scheduled frame requests, as the browser would every 200 ms.
+  for (let frame = 0; frame < 4; frame++) {
+    await new Promise(resolve => setImmediate(resolve));
+
+    const [id, timer] = [...timers.entries()].at(-1);
+
+    assert.notEqual(timer.delay, 2000, "a successful frame must not trigger the retry delay");
+
+    timers.delete(id);
+    sandbox.performance.advance(200);
+    timer.callback();
+  }
+
+  await new Promise(resolve => setImmediate(resolve));
+
+  assert.ok(requests.filter(url => url === "/api/predict").length >= 4);
+  assert.equal(e.errorMessage.textContent, "");
+  assert.equal(
+    e.modelStatus.textContent,
+    "Model ready: 24 letters (all except J and Z)"
+  );
+  assert.equal(e.detectedLetter.textContent, "D");
+  assert.equal(e.addLetter.disabled, false);
+
+  e.stopCamera.click();
+});
