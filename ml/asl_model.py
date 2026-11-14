@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import argparse
-from collections import Counter
+from collections import Counter, deque
 from contextlib import AbstractContextManager
 import csv
 from datetime import datetime, timezone
@@ -478,19 +478,57 @@ def predict_image(image: Image.Image, extractor: HandExtractor, bundle: dict) ->
 
 
 class StablePrediction:
-    def __init__(self, required: int = 2):
-        self.required = required
-        self.previous = None
-        self.count = 0
+    """Choose the letter to display from a short window of recent frames.
 
-    def update(self, result: dict) -> str | None:
+    Single frames are noisy: motion blur or a borderline confidence can blank or
+    flip the letter. A letter locks in when it leads the window's confidence-
+    weighted vote with at least ``share`` of the letter votes and appears in at
+    least half of the window's frames (and ``min_frames`` frames), once the window
+    is at least half full. Once shown, it stays until another letter wins the
+    window, or until no frame has shown it for ``hold`` seconds (uncertain,
+    no-hand, or disagreeing frames).
+    """
+
+    def __init__(self, window: float = 0.6, hold: float = 0.4, share: float = 0.6, min_frames: int = 3):
+        if window <= 0 or hold <= 0:
+            raise ValueError("Window and hold must be greater than zero seconds")
+        self.window, self.hold, self.share, self.min_frames = window, hold, share, min_frames
+        self.frames: deque[tuple[float, str | None, float]] = deque()
+        self.letter: str | None = None
+        self.last_seen = 0.0
+        self.leader: str | None = None
+        self.leader_share = 0.0
+
+    def update(self, result: dict, now: float | None = None) -> str | None:
+        now = time.monotonic() if now is None else now
         letter = result["letter"] if result["status"] == "recognized" else None
-        if letter is None:
-            self.previous, self.count = None, 0
-            return None
-        self.count = self.count + 1 if letter == self.previous else 1
-        self.previous = letter
-        return letter if self.count >= self.required else None
+        self.frames.append((now, letter, float(result.get("confidence") or 0.0) if letter else 0.0))
+        while self.frames[0][0] <= now - self.window:
+            self.frames.popleft()
+
+        votes, counts = Counter(), Counter()
+        for _, voted, weight in self.frames:
+            if voted is not None:
+                votes[voted] += weight
+                counts[voted] += 1
+        self.leader, self.leader_share = None, 0.0
+        if votes:
+            self.leader = max(votes, key=votes.get)
+            self.leader_share = votes[self.leader] / max(sum(votes.values()), 1e-9)
+        locked = (
+            self.leader is not None
+            and now - self.frames[0][0] >= self.window / 2
+            and self.leader_share >= self.share
+            and counts[self.leader] >= max(self.min_frames, len(self.frames) / 2)
+        )
+        if locked and self.leader != self.letter:
+            self.letter, self.last_seen = self.leader, now
+        elif self.letter is not None and letter == self.letter:
+            # The grace period counts from the last frame that actually showed the letter.
+            self.last_seen = now
+        if self.letter is not None and now - self.last_seen > self.hold:
+            self.letter = None
+        return self.letter
 
 
 def open_camera(camera_index: int):
@@ -519,7 +557,10 @@ def open_camera(camera_index: int):
     return capture
 
 
-def render_webcam_output(frame: np.ndarray, result: dict, letter: str | None, elapsed_ms: float) -> np.ndarray:
+def render_webcam_output(
+    frame: np.ndarray, result: dict, letter: str | None, elapsed_ms: float,
+    leader: str | None = None, leader_share: float = 0.0,
+) -> np.ndarray:
     """Keep the prediction large and readable below the camera image."""
     import cv2
 
@@ -540,6 +581,9 @@ def render_webcam_output(frame: np.ndarray, result: dict, letter: str | None, el
         "invalid_landmarks": "Reposition your hand",
     }
     title = f"Letter: {letter}" if letter else messages.get(result["status"], "Waiting for a sign")
+    if not letter and leader:
+        # Show which letter is building up in the window and how strongly it leads.
+        title = f"Hold steady... ({leader} {leader_share:.0%})"
     font_scale, thickness = (2.4, 5) if letter else (1.4, 3)
     color = (80, 255, 140) if letter else (255, 255, 255)
     cv2.putText(display, title, (24, height + 72), cv2.FONT_HERSHEY_SIMPLEX, font_scale, color, thickness, cv2.LINE_AA)
@@ -549,12 +593,12 @@ def render_webcam_output(frame: np.ndarray, result: dict, letter: str | None, el
     return display
 
 
-def webcam(camera_index: int) -> None:
+def webcam(camera_index: int, window: float = 0.6, hold: float = 0.4) -> None:
     import cv2
 
+    stable = StablePrediction(window=window, hold=hold)
     bundle = load_model()
     capture = open_camera(camera_index)
-    stable = StablePrediction()
     try:
         with HandExtractor() as extractor:
             while True:
@@ -566,7 +610,7 @@ def webcam(camera_index: int) -> None:
                 letter = stable.update(result)
                 # Classify original pixels; mirror and resize only the display.
                 elapsed = (time.perf_counter() - start) * 1000
-                display = render_webcam_output(frame, result, letter, elapsed)
+                display = render_webcam_output(frame, result, letter, elapsed, stable.leader, stable.leader_share)
                 cv2.imshow("Group08 standalone ASL model", display)
                 if cv2.waitKey(1) & 0xFF in (ord("q"), 27) or cv2.getWindowProperty("Group08 standalone ASL model", cv2.WND_PROP_VISIBLE) < 1:
                     break
@@ -627,6 +671,16 @@ def positive_integer(value: str) -> int:
     return integer
 
 
+def positive_float(value: str) -> float:
+    try:
+        number = float(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError("must be a number") from error
+    if not np.isfinite(number) or number <= 0:
+        raise argparse.ArgumentTypeError("must be greater than zero")
+    return number
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(
         description=__doc__,
@@ -639,6 +693,14 @@ def main(argv: list[str] | None = None) -> None:
     predict_parser.add_argument("image", type=Path)
     webcam_parser = commands.add_parser("webcam")
     webcam_parser.add_argument("--camera", type=nonnegative_integer, default=0)
+    webcam_parser.add_argument(
+        "--window", type=positive_float, default=0.6, metavar="SECONDS",
+        help="Seconds of recent frames that vote on the letter; larger is steadier but slower (default 0.6)",
+    )
+    webcam_parser.add_argument(
+        "--hold", type=positive_float, default=0.4, metavar="SECONDS",
+        help="Seconds a shown letter survives dropouts before clearing (default 0.4)",
+    )
     benchmark_parser = commands.add_parser("benchmark")
     benchmark_parser.add_argument("--count", type=positive_integer, default=100)
     arguments = list(sys.argv[1:] if argv is None else argv)
@@ -662,7 +724,7 @@ def main(argv: list[str] | None = None) -> None:
         with Image.open(args.image) as image, HandExtractor() as extractor:
             print(json.dumps(predict_image(image, extractor, bundle), indent=2))
     elif args.command == "webcam":
-        webcam(args.camera)
+        webcam(args.camera, args.window, args.hold)
     elif args.command == "benchmark":
         benchmark(args.count)
 
