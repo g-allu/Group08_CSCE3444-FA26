@@ -5,6 +5,7 @@ const assert = require("node:assert/strict");
 const {
   setup,
   recognize,
+  sendFrame,
   createCameraStream
 } = require("./frontend.test.cjs");
 
@@ -18,15 +19,70 @@ function prediction(letter, confidence = 0.95) {
 
 // TEST 1: All currently supported ASL letters.
 
-test("All five supported letters can be added", () => {
+const STATIC_LETTERS = "ABCDEFGHIKLMNOPQRSTUVWXY";
+
+test("All 24 static letters can be added", () => {
   const { elements: e, sandbox } = setup();
 
-  for (const letter of ["A", "B", "C", "L", "Y"]) {
+  for (const letter of STATIC_LETTERS) {
     recognize(sandbox, letter);
     e.addLetter.click();
   }
 
-  assert.equal(e.transcript.textContent, "ABCLY");
+  assert.equal(e.transcript.textContent, STATIC_LETTERS);
+});
+
+test("Motion letters J and Z cannot be added", () => {
+  const { elements: e, sandbox } = setup();
+
+  for (const letter of ["J", "Z"]) {
+    recognize(sandbox, letter);
+    e.addLetter.click();
+  }
+
+  assert.equal(e.transcript.textContent, "No translation yet");
+});
+
+test("Health letters replace the default list and ignore bad entries", async () => {
+  const { elements: e, sandbox } = setup({
+    fetch: async () => ({
+      ok: true,
+
+      async json() {
+        return { ready: true, letters: ["A", "B", "j", "ZZ", 7, "Z"] };
+      }
+    })
+  });
+
+  await sandbox.checkModel();
+
+  assert.equal(e.modelStatus.textContent, "Model ready: A, B, Z");
+
+  recognize(sandbox, "Z");
+  e.addLetter.click();
+  recognize(sandbox, "C");
+  e.addLetter.click();
+
+  assert.equal(e.transcript.textContent, "Z");
+});
+
+test("Health without a usable letter list keeps the default letters", async () => {
+  const { elements: e, sandbox } = setup({
+    fetch: async () => ({
+      ok: true,
+
+      async json() {
+        return { ready: true, letters: ["?", ""] };
+      }
+    })
+  });
+
+  await sandbox.checkModel();
+
+  assert.equal(
+    e.modelStatus.textContent,
+    "Model ready: 24 letters (all except J and Z)"
+  );
 });
 
 // TEST 2: Repeated predictions should not rewrite live regions.
@@ -68,53 +124,87 @@ test("Stable recognition does not repeat unchanged announcements", () => {
   );
 });
 
-// TEST 3: Different letters require fresh confirmation.
+// TEST 3: A different letter replaces the current one only after winning the window.
 
-test("A different prediction requires two matching frames", () => {
+test("A different prediction must win the vote window", () => {
   const { elements: e, sandbox } = setup();
 
   recognize(sandbox, "A");
 
+  assert.equal(e.detectedLetter.textContent, "A");
+
+  sendFrame(sandbox, prediction("B"));
+
+  // One B frame is not enough to replace A.
+  assert.equal(e.detectedLetter.textContent, "A");
   assert.equal(e.addLetter.disabled, false);
 
-  sandbox.displayRecognitionResult(
-    prediction("B")
-  );
-
-  assert.equal(e.addLetter.disabled, true);
-  assert.equal(e.detectedLetter.textContent, "—");
-
-  sandbox.displayRecognitionResult(
-    prediction("B")
-  );
+  sendFrame(sandbox, prediction("B"));
+  sendFrame(sandbox, prediction("B"));
 
   assert.equal(e.addLetter.disabled, false);
   assert.equal(e.detectedLetter.textContent, "B");
 });
 
-// TEST 4: No-hand detection clears previous recognition.
+// TEST 4: A short dropout keeps the letter; a long one clears it.
 
-test("Removing the hand resets prediction stability", () => {
+test("Letter survives a short dropout and clears after a long one", () => {
   const { elements: e, sandbox } = setup();
 
   recognize(sandbox, "C");
 
-  sandbox.displayRecognitionResult({
-    status: "no_hand"
-  });
+  sendFrame(sandbox, { status: "no_hand" });
+  sendFrame(sandbox, { status: "no_hand" });
 
-  sandbox.displayRecognitionResult(
-    prediction("C")
+  // 400 ms without C is within the 600 ms hold.
+  assert.equal(e.detectedLetter.textContent, "C");
+  assert.equal(e.addLetter.disabled, false);
+  assert.equal(
+    e.recognitionStatus.textContent,
+    "Show one hand to the camera"
   );
 
+  sendFrame(sandbox, { status: "no_hand" });
+  sendFrame(sandbox, { status: "no_hand" });
+
+  // 800 ms without C clears it.
+  assert.equal(e.detectedLetter.textContent, "—");
   assert.equal(e.addLetter.disabled, true);
 
-  sandbox.displayRecognitionResult(
-    prediction("C")
-  );
+  recognize(sandbox, "C");
 
   assert.equal(e.addLetter.disabled, false);
   assert.equal(e.detectedLetter.textContent, "C");
+});
+
+test("Single stray frames do not clear or flip the letter", () => {
+  const { elements: e, sandbox } = setup();
+
+  recognize(sandbox, "B");
+
+  for (const result of [
+    prediction("R", 0.6),
+    { status: "uncertain", confidence: 0.4 },
+    prediction("B"),
+    { status: "multiple_hands" },
+    prediction("B")
+  ]) {
+    sendFrame(sandbox, result);
+    assert.equal(e.detectedLetter.textContent, "B");
+    assert.equal(e.addLetter.disabled, false);
+  }
+});
+
+test("Alternating letters with no majority show nothing", () => {
+  const { elements: e, sandbox } = setup();
+
+  for (let frame = 0; frame < 10; frame++) {
+    sendFrame(sandbox, prediction(frame % 2 ? "N" : "M"));
+  }
+
+  assert.equal(e.detectedLetter.textContent, "—");
+  assert.equal(e.addLetter.disabled, true);
+  assert.equal(e.recognitionStatus.textContent, "Hold the sign steady");
 });
 
 // TEST 5: Recognition handles empty or malformed responses.
@@ -279,7 +369,7 @@ test("Stale model status responses are ignored", async () => {
 
   assert.equal(
     e.modelStatus.textContent,
-    "Model ready: A, B, C, L, Y"
+    "Model ready: 24 letters (all except J and Z)"
   );
 
   resolveFirst({
@@ -294,6 +384,64 @@ test("Stale model status responses are ignored", async () => {
 
   assert.equal(
     e.modelStatus.textContent,
-    "Model ready: A, B, C, L, Y"
+    "Model ready: 24 letters (all except J and Z)"
   );
+});
+
+// Regression: successful predictions must reach the recognition display.
+// A stale reference once made every successful response fall into the
+// "Recognition unavailable" retry path.
+
+test("Successful predictions from the server lock in a letter", async () => {
+  const requests = [];
+
+  const { elements: e, sandbox, timers } = setup({
+    fetch: async url => {
+      requests.push(url);
+
+      return {
+        ok: true,
+
+        async json() {
+          return url === "/api/predict"
+            ? { status: "recognized", letter: "D", confidence: 0.9 }
+            : { ready: true };
+        }
+      };
+    }
+  });
+
+  Object.assign(e.camera, {
+    videoWidth: 640,
+    videoHeight: 480,
+    readyState: 4
+  });
+
+  await e.startCamera.click();
+
+  // Run the scheduled frame requests, as the browser would every 200 ms.
+  for (let frame = 0; frame < 4; frame++) {
+    await new Promise(resolve => setImmediate(resolve));
+
+    const [id, timer] = [...timers.entries()].at(-1);
+
+    assert.notEqual(timer.delay, 2000, "a successful frame must not trigger the retry delay");
+
+    timers.delete(id);
+    sandbox.performance.advance(200);
+    timer.callback();
+  }
+
+  await new Promise(resolve => setImmediate(resolve));
+
+  assert.ok(requests.filter(url => url === "/api/predict").length >= 4);
+  assert.equal(e.errorMessage.textContent, "");
+  assert.equal(
+    e.modelStatus.textContent,
+    "Model ready: 24 letters (all except J and Z)"
+  );
+  assert.equal(e.detectedLetter.textContent, "D");
+  assert.equal(e.addLetter.disabled, false);
+
+  e.stopCamera.click();
 });

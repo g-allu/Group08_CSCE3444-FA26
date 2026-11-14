@@ -4,7 +4,8 @@ const assert = require("node:assert/strict");
 
 const {
   setup,
-  recognize
+  recognize,
+  sendFrame
 } = require("./frontend.test.cjs");
 
 const {
@@ -352,9 +353,10 @@ test("Invalid recognition preserves existing translation", async () => {
   recognize(sandbox, "A");
   e.addLetter.click();
 
-  sandbox.displayRecognitionResult({
-    status: "no_hand"
-  });
+  // Keep the hand away longer than the 600 ms hold.
+  for (let frame = 0; frame < 4; frame++) {
+    sendFrame(sandbox, { status: "no_hand" });
+  }
 
   e.addLetter.click();
 

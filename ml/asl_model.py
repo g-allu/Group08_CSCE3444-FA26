@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import argparse
-from collections import Counter
+from collections import Counter, deque
 from contextlib import AbstractContextManager
 import csv
 from datetime import datetime, timezone
@@ -22,11 +22,13 @@ os.environ.setdefault("MPLCONFIGDIR", str(ROOT / "artifacts/matplotlib"))
 
 import joblib
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageOps
 from scipy.fft import dctn
-from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report, confusion_matrix
 from sklearn.model_selection import StratifiedGroupKFold
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.svm import SVC
 
 if __package__:
     from .download_data import LANDMARKER, MANIFEST, PARQUET, download, sha256
@@ -37,16 +39,18 @@ else:
 MOTION_LETTERS = ("J", "Z")
 LETTERS = tuple(chr(code) for code in range(ord("A"), ord("Z") + 1) if chr(code) not in MOTION_LETTERS)
 CLASSES = LETTERS
-FEATURE_VERSION = "world-wrist-relative-middle-mcp-scale-v1"
-MODEL_FEATURE_VERSION = "landmarks-plus-tip-distances-joint-angles-v1"
+# v2 retries hand detection on a padded copy when the first pass finds no hand.
+FEATURE_VERSION = "world-wrist-relative-middle-mcp-scale-padded-retry-v2"
+MODEL_FEATURE_VERSION = "landmarks-plus-tip-distances-joint-angles-orientation-v2"
 MIN_THRESHOLD = 0.5
-TARGET_PRECISION = 0.95
+TARGET_PRECISION = 0.98
 FEATURES = ROOT / "data/processed/features.npz"
 SPLITS = ROOT / "data/processed/splits.json"
 MODEL = ROOT / "artifacts/asl_alphabet.joblib"
 REPORTS = ROOT / "reports"
 SEED = 42
 NEAR_DUPLICATE_DISTANCE = 4
+RETRY_PADDING = 0.5
 
 
 def write_json(path: Path, value: dict) -> None:
@@ -76,7 +80,9 @@ def model_features(features: np.ndarray) -> np.ndarray:
 
     Fingertip spacing, finger bend angles, and thumb placement separate similar
     letters (for example M, N, S, T, A, and E) far better than raw coordinates.
-    Rows with missing landmarks stay NaN.
+    Finger directions and palm orientation separate letters that share a shape
+    but point differently (K and P, G and Q, U and H). Rows with missing
+    landmarks stay NaN.
     """
     features = np.asarray(features, dtype=np.float64)
     points = features.reshape(-1, 21, 3)
@@ -91,7 +97,21 @@ def model_features(features: np.ndarray) -> np.ndarray:
             lengths = np.linalg.norm(before, axis=1) * np.linalg.norm(after, axis=1)
             columns.append((before * after).sum(axis=1) / np.maximum(lengths, 1e-8))
     columns.extend(np.linalg.norm(points[:, 4] - points[:, index], axis=1) for index in THUMB_TARGETS)
-    return np.hstack([features, np.stack(columns, axis=1)]).astype(np.float32)
+
+    def unit(vectors):
+        return vectors / np.maximum(np.linalg.norm(vectors, axis=-1, keepdims=True), 1e-8)
+
+    directions = [unit(points[:, tip] - points[:, base]) for base, tip in ((2, 4), (5, 8), (9, 12), (13, 16), (17, 20))]
+    palm_normal = unit(np.cross(points[:, 5] - points[:, 0], points[:, 17] - points[:, 0]))
+    # Sign shows whether the index and middle fingers cross (R).
+    crossing = (palm_normal * np.cross(points[:, 8] - points[:, 5], points[:, 12] - points[:, 9])).sum(axis=1)
+    columns.append(crossing)
+    columns.extend((points[:, tip] * palm_normal).sum(axis=1) for tip in FINGERTIPS)
+    columns.extend(
+        np.linalg.norm(points[:, 4] - (points[:, first] + points[:, second]) / 2, axis=1)
+        for first, second in ((6, 10), (10, 14), (14, 18))
+    )
+    return np.hstack([features, np.stack(columns, axis=1), *directions, palm_normal]).astype(np.float32)
 
 
 def mirror_landmarks(features: np.ndarray) -> np.ndarray:
@@ -170,7 +190,25 @@ class HandExtractor(AbstractContextManager):
         self.detector = vision.HandLandmarker.create_from_options(options)
 
     def extract(self, image: Image.Image) -> tuple[np.ndarray | None, str]:
-        pixels = np.ascontiguousarray(image.convert("RGB"), dtype=np.uint8)
+        feature, status, _ = self.extract_detailed(image)
+        return feature, status
+
+    def extract_detailed(self, image: Image.Image) -> tuple[np.ndarray | None, str, bool]:
+        """Detect one hand; retry with a black border when a close-up hand is missed.
+
+        The palm detector often misses hands that fill the frame. Padding shrinks
+        the hand relative to the image and recovers many of those cases.
+        """
+        image = image.convert("RGB")
+        feature, status = self._detect(image)
+        if status != "no_hand":
+            return feature, status, False
+        border = max(1, round(max(image.size) * RETRY_PADDING))
+        feature, status = self._detect(ImageOps.expand(image, border=border, fill=(0, 0, 0)))
+        return feature, status, status == "ok"
+
+    def _detect(self, image: Image.Image) -> tuple[np.ndarray | None, str]:
+        pixels = np.ascontiguousarray(image, dtype=np.uint8)
         result = self.detector.detect(self.mp.Image(image_format=self.mp.ImageFormat.SRGB, data=pixels))
         if not result.hand_world_landmarks:
             return None, "no_hand"
@@ -199,15 +237,16 @@ def source_rows():
 
 
 def extract_features() -> None:
-    rows, features, labels, statuses, digests, hashes = [], [], [], [], [], []
+    rows, features, labels, statuses, digests, hashes, padded = [], [], [], [], [], [], []
     start = time.perf_counter()
     with HandExtractor() as extractor:
         for index, letter, content in source_rows():
             with Image.open(io.BytesIO(content)) as image:
                 image = image.convert("RGB")
                 phash = perceptual_hash(image)
-                feature, status = extractor.extract(image)
+                feature, status, used_padding = extractor.extract_detailed(image)
             rows.append(index)
+            padded.append(used_padding)
             labels.append(letter)
             hashes.append(phash)
             digests.append(hashlib.sha256(content).hexdigest())
@@ -220,7 +259,7 @@ def extract_features() -> None:
     FEATURES.parent.mkdir(parents=True, exist_ok=True)
     np.savez_compressed(
         FEATURES, features=np.asarray(features), rows=np.asarray(rows), labels=np.asarray(labels),
-        statuses=np.asarray(statuses), groups=groups, digests=np.asarray(digests),
+        statuses=np.asarray(statuses), padded=np.asarray(padded), groups=groups, digests=np.asarray(digests),
         phashes=np.asarray(hashes, dtype=np.uint64), feature_version=FEATURE_VERSION,
         source_sha256=sha256(PARQUET), landmarker_sha256=sha256(LANDMARKER),
     )
@@ -230,6 +269,7 @@ def extract_features() -> None:
     }
     summary = {
         "images": len(rows), "statuses": dict(Counter(statuses)), "by_source_letter": counts,
+        "recovered_with_padding": int(sum(padded)),
         "duplicate_groups": len(set(groups.tolist())), "phash_max_distance": NEAR_DUPLICATE_DISTANCE,
         "extraction_seconds": round(time.perf_counter() - start, 2),
         "feature_version": FEATURE_VERSION,
@@ -330,16 +370,13 @@ def train_model() -> None:
     train = train[np.isfinite(data["features"][train]).all(axis=1)]
     if set(y[train]) != set(CLASSES):
         raise ValueError("Training data has no detected hands for one or more classes")
-    model = RandomForestClassifier(
-        n_estimators=300, max_depth=20, min_samples_leaf=2,
-        class_weight="balanced", random_state=SEED, n_jobs=-1,
-    )
+    # An RBF SVM matched the forest's precision with higher recall at a fraction of the size.
+    model = make_pipeline(StandardScaler(), SVC(C=10, gamma="scale", probability=True, random_state=SEED))
     print(f"Training on {len(train):,} detected hands: {dict(Counter(y[train]))}", flush=True)
     start = time.perf_counter()
     features = data["features"][train]
     # Mirrored copies stay in the training split, so validation and test remain unseen.
     model.fit(model_features(np.vstack([features, mirror_landmarks(features)])), np.concatenate([y[train], y[train]]))
-    model.n_jobs = 1
     val = splits["validation"]
     threshold, qualified, trials = select_threshold(model, data["features"][val], y[val])
     manifest = {
@@ -357,7 +394,7 @@ def train_model() -> None:
         "source": json.loads(MANIFEST.read_text()), "split_manifest_sha256": sha256(SPLITS),
         "feature_cache_sha256": sha256(FEATURES), "python": platform.python_version(),
         "dependencies": {name: version(name) for name in ("mediapipe", "scikit-learn", "numpy", "joblib", "Pillow", "pyarrow", "opencv-contrib-python")},
-        "forest": model.get_params(), "training_samples": len(train), "training_rows_with_mirrors": 2 * len(train),
+        "classifier": {"type": "StandardScaler + SVC", **{key: value for key, value in model[-1].get_params().items() if key != "random_state"}, "random_state": SEED}, "training_samples": len(train), "training_rows_with_mirrors": 2 * len(train),
         "training_seconds": round(time.perf_counter() - start, 2),
     }
     MODEL.parent.mkdir(parents=True, exist_ok=True)
@@ -441,19 +478,57 @@ def predict_image(image: Image.Image, extractor: HandExtractor, bundle: dict) ->
 
 
 class StablePrediction:
-    def __init__(self, required: int = 2):
-        self.required = required
-        self.previous = None
-        self.count = 0
+    """Choose the letter to display from a short window of recent frames.
 
-    def update(self, result: dict) -> str | None:
+    Single frames are noisy: motion blur or a borderline confidence can blank or
+    flip the letter. A letter locks in when it leads the window's confidence-
+    weighted vote with at least ``share`` of the letter votes and appears in at
+    least half of the window's frames (and ``min_frames`` frames), once the window
+    is at least half full. Once shown, it stays until another letter wins the
+    window, or until no frame has shown it for ``hold`` seconds (uncertain,
+    no-hand, or disagreeing frames).
+    """
+
+    def __init__(self, window: float = 0.6, hold: float = 0.4, share: float = 0.6, min_frames: int = 3):
+        if window <= 0 or hold <= 0:
+            raise ValueError("Window and hold must be greater than zero seconds")
+        self.window, self.hold, self.share, self.min_frames = window, hold, share, min_frames
+        self.frames: deque[tuple[float, str | None, float]] = deque()
+        self.letter: str | None = None
+        self.last_seen = 0.0
+        self.leader: str | None = None
+        self.leader_share = 0.0
+
+    def update(self, result: dict, now: float | None = None) -> str | None:
+        now = time.monotonic() if now is None else now
         letter = result["letter"] if result["status"] == "recognized" else None
-        if letter is None:
-            self.previous, self.count = None, 0
-            return None
-        self.count = self.count + 1 if letter == self.previous else 1
-        self.previous = letter
-        return letter if self.count >= self.required else None
+        self.frames.append((now, letter, float(result.get("confidence") or 0.0) if letter else 0.0))
+        while self.frames[0][0] <= now - self.window:
+            self.frames.popleft()
+
+        votes, counts = Counter(), Counter()
+        for _, voted, weight in self.frames:
+            if voted is not None:
+                votes[voted] += weight
+                counts[voted] += 1
+        self.leader, self.leader_share = None, 0.0
+        if votes:
+            self.leader = max(votes, key=votes.get)
+            self.leader_share = votes[self.leader] / max(sum(votes.values()), 1e-9)
+        locked = (
+            self.leader is not None
+            and now - self.frames[0][0] >= self.window / 2
+            and self.leader_share >= self.share
+            and counts[self.leader] >= max(self.min_frames, len(self.frames) / 2)
+        )
+        if locked and self.leader != self.letter:
+            self.letter, self.last_seen = self.leader, now
+        elif self.letter is not None and letter == self.letter:
+            # The grace period counts from the last frame that actually showed the letter.
+            self.last_seen = now
+        if self.letter is not None and now - self.last_seen > self.hold:
+            self.letter = None
+        return self.letter
 
 
 def open_camera(camera_index: int):
@@ -482,7 +557,10 @@ def open_camera(camera_index: int):
     return capture
 
 
-def render_webcam_output(frame: np.ndarray, result: dict, letter: str | None, elapsed_ms: float) -> np.ndarray:
+def render_webcam_output(
+    frame: np.ndarray, result: dict, letter: str | None, elapsed_ms: float,
+    leader: str | None = None, leader_share: float = 0.0,
+) -> np.ndarray:
     """Keep the prediction large and readable below the camera image."""
     import cv2
 
@@ -503,6 +581,9 @@ def render_webcam_output(frame: np.ndarray, result: dict, letter: str | None, el
         "invalid_landmarks": "Reposition your hand",
     }
     title = f"Letter: {letter}" if letter else messages.get(result["status"], "Waiting for a sign")
+    if not letter and leader:
+        # Show which letter is building up in the window and how strongly it leads.
+        title = f"Hold steady... ({leader} {leader_share:.0%})"
     font_scale, thickness = (2.4, 5) if letter else (1.4, 3)
     color = (80, 255, 140) if letter else (255, 255, 255)
     cv2.putText(display, title, (24, height + 72), cv2.FONT_HERSHEY_SIMPLEX, font_scale, color, thickness, cv2.LINE_AA)
@@ -512,12 +593,12 @@ def render_webcam_output(frame: np.ndarray, result: dict, letter: str | None, el
     return display
 
 
-def webcam(camera_index: int) -> None:
+def webcam(camera_index: int, window: float = 0.6, hold: float = 0.4) -> None:
     import cv2
 
+    stable = StablePrediction(window=window, hold=hold)
     bundle = load_model()
     capture = open_camera(camera_index)
-    stable = StablePrediction()
     try:
         with HandExtractor() as extractor:
             while True:
@@ -529,7 +610,7 @@ def webcam(camera_index: int) -> None:
                 letter = stable.update(result)
                 # Classify original pixels; mirror and resize only the display.
                 elapsed = (time.perf_counter() - start) * 1000
-                display = render_webcam_output(frame, result, letter, elapsed)
+                display = render_webcam_output(frame, result, letter, elapsed, stable.leader, stable.leader_share)
                 cv2.imshow("Group08 standalone ASL model", display)
                 if cv2.waitKey(1) & 0xFF in (ord("q"), 27) or cv2.getWindowProperty("Group08 standalone ASL model", cv2.WND_PROP_VISIBLE) < 1:
                     break
@@ -590,6 +671,16 @@ def positive_integer(value: str) -> int:
     return integer
 
 
+def positive_float(value: str) -> float:
+    try:
+        number = float(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError("must be a number") from error
+    if not np.isfinite(number) or number <= 0:
+        raise argparse.ArgumentTypeError("must be greater than zero")
+    return number
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(
         description=__doc__,
@@ -602,6 +693,14 @@ def main(argv: list[str] | None = None) -> None:
     predict_parser.add_argument("image", type=Path)
     webcam_parser = commands.add_parser("webcam")
     webcam_parser.add_argument("--camera", type=nonnegative_integer, default=0)
+    webcam_parser.add_argument(
+        "--window", type=positive_float, default=0.6, metavar="SECONDS",
+        help="Seconds of recent frames that vote on the letter; larger is steadier but slower (default 0.6)",
+    )
+    webcam_parser.add_argument(
+        "--hold", type=positive_float, default=0.4, metavar="SECONDS",
+        help="Seconds a shown letter survives dropouts before clearing (default 0.4)",
+    )
     benchmark_parser = commands.add_parser("benchmark")
     benchmark_parser.add_argument("--count", type=positive_integer, default=100)
     arguments = list(sys.argv[1:] if argv is None else argv)
@@ -625,7 +724,7 @@ def main(argv: list[str] | None = None) -> None:
         with Image.open(args.image) as image, HandExtractor() as extractor:
             print(json.dumps(predict_image(image, extractor, bundle), indent=2))
     elif args.command == "webcam":
-        webcam(args.camera)
+        webcam(args.camera, args.window, args.hold)
     elif args.command == "benchmark":
         benchmark(args.count)
 

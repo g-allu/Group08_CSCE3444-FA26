@@ -9,7 +9,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 
-EXPECTED_LETTERS = {"A", "B", "C", "L", "Y"}
+EXPECTED_LETTERS = set("ABCDEFGHIKLMNOPQRSTUVWXY")  # 24 static letters; J and Z need motion
 
 
 def request(base_url, path, method="GET", data=None, headers=None):

@@ -14,9 +14,8 @@ Project Board Link: https://github.com/users/g-allu/projects/2
 
 Current Status: Initial project planning and repository setup completed.
 
-Intial recognition status: "A, B, C, L, Y"
-Needs more testing of these letters.
-Models has to be trained on the rest of the letters.
+Recognition status: 24 static letters, A–Y. J and Z are signed with motion and are not supported yet.
+Model accuracy on held-out dataset images where a hand is detected: 98.0% precision, 95.3% recall. Live webcam accuracy still needs more testing.
 
 Current Development Update: Frontend, backend, and machine learning model integration completed. Additional frontend features and testing have been implemented for the final demonstration.
 

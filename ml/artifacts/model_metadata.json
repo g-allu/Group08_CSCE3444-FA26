@@ -55,12 +55,12 @@
     "J",
     "Z"
   ],
-  "feature_version": "world-wrist-relative-middle-mcp-scale-v1",
-  "model_feature_version": "landmarks-plus-tip-distances-joint-angles-v1",
+  "feature_version": "world-wrist-relative-middle-mcp-scale-padded-retry-v2",
+  "model_feature_version": "landmarks-plus-tip-distances-joint-angles-orientation-v2",
   "training_augmentation": "horizontal mirror of training landmarks",
-  "threshold": 0.5,
+  "threshold": 0.55,
   "validation_threshold_qualified": true,
-  "created_at_utc": "2026-11-10T01:44:14.522850+00:00",
+  "created_at_utc": "2026-11-14T00:51:27.879462+00:00",
   "seed": 42,
   "source": {
     "dataset": "Marxulia/asl_sign_languages_alphabets_v03",
@@ -80,8 +80,8 @@
       }
     }
   },
-  "split_manifest_sha256": "6d192415f124fd5bc46843dae7b87cde180c4f813190ed7e2ff6f2687fbd6244",
-  "feature_cache_sha256": "4b89a7d8273b129a612e39ad8ca9977ec3eac3518d17f26412239f9f638c3e50",
+  "split_manifest_sha256": "1e5998dd7fc7d8527b439160f29b32438f715caa610d1693b084e084df711c79",
+  "feature_cache_sha256": "e75ef26aa3ffb64ab6f508af9c9a64bcfcc278c1cdd93e286434298d7bedca9f",
   "python": "3.12.14",
   "dependencies": {
     "mediapipe": "1.1.1",
@@ -92,28 +92,25 @@
     "pyarrow": "26.0.0",
     "opencv-contrib-python": "5.0.0.93"
   },
-  "forest": {
-    "bootstrap": true,
-    "ccp_alpha": 0.0,
-    "class_weight": "balanced",
-    "criterion": "gini",
-    "max_depth": 20,
-    "max_features": "sqrt",
-    "max_leaf_nodes": null,
-    "max_samples": null,
-    "min_impurity_decrease": 0.0,
-    "min_samples_leaf": 2,
-    "min_samples_split": 2,
-    "min_weight_fraction_leaf": 0.0,
-    "monotonic_cst": null,
-    "n_estimators": 300,
-    "n_jobs": 1,
-    "oob_score": false,
-    "random_state": 42,
-    "verbose": 0,
-    "warm_start": false
+  "classifier": {
+    "type": "StandardScaler + SVC",
+    "C": 10,
+    "break_ties": false,
+    "cache_size": 200,
+    "class_weight": null,
+    "coef0": 0.0,
+    "decision_function_shape": "ovr",
+    "degree": 3,
+    "gamma": "scale",
+    "kernel": "rbf",
+    "max_iter": -1,
+    "probability": true,
+    "shrinking": true,
+    "tol": 0.001,
+    "verbose": false,
+    "random_state": 42
   },
-  "training_samples": 6213,
-  "training_rows_with_mirrors": 12426,
-  "training_seconds": 2.28
+  "training_samples": 6622,
+  "training_rows_with_mirrors": 13244,
+  "training_seconds": 8.5
 }

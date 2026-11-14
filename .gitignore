@@ -1,7 +1,7 @@
 # Local contributor instructions
 AGENTS.md
 agents.md
-
+.claude/
 # Local documentation, generated reports, and tests are not shipped.
 /docs/
 /ml/reports/
