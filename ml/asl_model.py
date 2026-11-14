@@ -1,4 +1,4 @@
-"""Standalone five-letter ASL experiment. No web application dependencies."""
+"""Standalone static-alphabet ASL experiment. No web application dependencies."""
 
 from __future__ import annotations
 
@@ -33,12 +33,17 @@ if __package__:
 else:
     from download_data import LANDMARKER, MANIFEST, PARQUET, download, sha256
 
-LETTERS = ("A", "B", "C", "L", "Y")
-CLASSES = (*LETTERS, "OTHER")
+# J and Z are signed with motion, so a single-frame classifier cannot recognize them.
+MOTION_LETTERS = ("J", "Z")
+LETTERS = tuple(chr(code) for code in range(ord("A"), ord("Z") + 1) if chr(code) not in MOTION_LETTERS)
+CLASSES = LETTERS
 FEATURE_VERSION = "world-wrist-relative-middle-mcp-scale-v1"
+MODEL_FEATURE_VERSION = "landmarks-plus-tip-distances-joint-angles-v1"
+MIN_THRESHOLD = 0.5
+TARGET_PRECISION = 0.95
 FEATURES = ROOT / "data/processed/features.npz"
 SPLITS = ROOT / "data/processed/splits.json"
-MODEL = ROOT / "artifacts/asl_five_letters.joblib"
+MODEL = ROOT / "artifacts/asl_alphabet.joblib"
 REPORTS = ROOT / "reports"
 SEED = 42
 NEAR_DUPLICATE_DISTANCE = 4
@@ -59,6 +64,41 @@ def normalize_landmarks(points: np.ndarray) -> np.ndarray:
     if scale < 1e-8:
         raise ValueError("Degenerate hand landmarks")
     return (relative / scale).astype(np.float32).reshape(63)
+
+
+FINGERTIPS = (4, 8, 12, 16, 20)
+FINGER_CHAINS = ((1, 2, 3, 4), (5, 6, 7, 8), (9, 10, 11, 12), (13, 14, 15, 16), (17, 18, 19, 20))
+THUMB_TARGETS = (5, 6, 9, 10, 13, 14, 17)
+
+
+def model_features(features: np.ndarray) -> np.ndarray:
+    """Append hand-shape geometry to normalized landmarks.
+
+    Fingertip spacing, finger bend angles, and thumb placement separate similar
+    letters (for example M, N, S, T, A, and E) far better than raw coordinates.
+    Rows with missing landmarks stay NaN.
+    """
+    features = np.asarray(features, dtype=np.float64)
+    points = features.reshape(-1, 21, 3)
+    columns = []
+    for first, tip in enumerate(FINGERTIPS):
+        columns.extend(np.linalg.norm(points[:, tip] - points[:, other], axis=1) for other in FINGERTIPS[first + 1:])
+    columns.extend(np.linalg.norm(points[:, tip], axis=1) for tip in FINGERTIPS)
+    for chain in FINGER_CHAINS:
+        joints = [points[:, 0], *(points[:, index] for index in chain)]
+        for middle in range(1, len(joints) - 1):
+            before, after = joints[middle - 1] - joints[middle], joints[middle + 1] - joints[middle]
+            lengths = np.linalg.norm(before, axis=1) * np.linalg.norm(after, axis=1)
+            columns.append((before * after).sum(axis=1) / np.maximum(lengths, 1e-8))
+    columns.extend(np.linalg.norm(points[:, 4] - points[:, index], axis=1) for index in THUMB_TARGETS)
+    return np.hstack([features, np.stack(columns, axis=1)]).astype(np.float32)
+
+
+def mirror_landmarks(features: np.ndarray) -> np.ndarray:
+    """Reflect normalized landmarks across x so one hand's samples teach the other hand."""
+    points = np.array(features, dtype=np.float32).reshape(-1, 21, 3)
+    points[:, :, 0] *= -1
+    return points.reshape(-1, 63)
 
 
 def perceptual_hash(image: Image.Image) -> int:
@@ -236,7 +276,7 @@ def model_predictions(model, features: np.ndarray, threshold: float):
     scores = np.zeros(len(features))
     valid = np.isfinite(features).all(axis=1)
     if valid.any():
-        probabilities = model.predict_proba(features[valid])
+        probabilities = model.predict_proba(model_features(features[valid]))
         best = probabilities.argmax(axis=1)
         candidates = model.classes_[best]
         confidence = probabilities[np.arange(len(best)), best]
@@ -252,7 +292,8 @@ def metrics_for(truth: np.ndarray, predicted: np.ndarray) -> dict:
     report = classification_report(truth, predicted, labels=list(LETTERS), zero_division=0, output_dict=True)
     per_letter = {letter: {key: float(value) for key, value in report[letter].items()} for letter in LETTERS}
     precision = float(correct[accepted].mean()) if accepted.any() else 0.0
-    rejection = float((~accepted[~supported]).mean()) if (~supported).any() else 0.0
+    # Every static letter is supported, so there may be no unsupported samples to reject.
+    rejection = float((~accepted[~supported]).mean()) if (~supported).any() else None
     return {
         "samples": len(truth), "supported_samples": int(supported.sum()),
         "accepted_predictions": int(accepted.sum()),
@@ -261,18 +302,22 @@ def metrics_for(truth: np.ndarray, predicted: np.ndarray) -> dict:
         "unsupported_rejection_rate": rejection,
         "macro_f1_supported": float(report["macro avg"]["f1-score"]),
         "per_letter": per_letter,
-        "acceptance_passed": bool(precision >= 0.9 and rejection >= 0.9 and all(v["recall"] >= 0.8 for v in per_letter.values())),
+        "acceptance_passed": bool(
+            precision >= 0.9 and (rejection is None or rejection >= 0.9)
+            and all(v["recall"] >= 0.8 for v in per_letter.values())
+        ),
     }
 
 
 def select_threshold(model, features: np.ndarray, truth: np.ndarray):
     trials = []
     selected = None
-    for threshold in np.round(np.arange(0.5, 0.951, 0.05), 2):
+    for threshold in np.round(np.arange(MIN_THRESHOLD, 0.951, 0.05), 2):
         predictions, _ = model_predictions(model, features, float(threshold))
         metrics = metrics_for(truth, predictions)
         trials.append({"threshold": float(threshold), **metrics})
-        if selected is None and metrics["accepted_letter_precision"] >= 0.9 and metrics["unsupported_rejection_rate"] >= 0.9:
+        rejection = metrics["unsupported_rejection_rate"]
+        if selected is None and metrics["accepted_letter_precision"] >= TARGET_PRECISION and (rejection is None or rejection >= 0.9):
             selected = float(threshold)
     return selected if selected is not None else 0.95, selected is not None, trials
 
@@ -287,11 +332,14 @@ def train_model() -> None:
         raise ValueError("Training data has no detected hands for one or more classes")
     model = RandomForestClassifier(
         n_estimators=300, max_depth=20, min_samples_leaf=2,
-        class_weight="balanced", random_state=SEED, n_jobs=1,
+        class_weight="balanced", random_state=SEED, n_jobs=-1,
     )
     print(f"Training on {len(train):,} detected hands: {dict(Counter(y[train]))}", flush=True)
     start = time.perf_counter()
-    model.fit(data["features"][train], y[train])
+    features = data["features"][train]
+    # Mirrored copies stay in the training split, so validation and test remain unseen.
+    model.fit(model_features(np.vstack([features, mirror_landmarks(features)])), np.concatenate([y[train], y[train]]))
+    model.n_jobs = 1
     val = splits["validation"]
     threshold, qualified, trials = select_threshold(model, data["features"][val], y[val])
     manifest = {
@@ -301,13 +349,15 @@ def train_model() -> None:
     }
     write_json(SPLITS, manifest)
     metadata = {
-        "letters": list(LETTERS), "classes": list(CLASSES), "feature_version": FEATURE_VERSION,
+        "letters": list(LETTERS), "classes": list(CLASSES), "unsupported_letters": list(MOTION_LETTERS),
+        "feature_version": FEATURE_VERSION, "model_feature_version": MODEL_FEATURE_VERSION,
+        "training_augmentation": "horizontal mirror of training landmarks",
         "threshold": threshold, "validation_threshold_qualified": qualified,
         "created_at_utc": datetime.now(timezone.utc).isoformat(), "seed": SEED,
         "source": json.loads(MANIFEST.read_text()), "split_manifest_sha256": sha256(SPLITS),
         "feature_cache_sha256": sha256(FEATURES), "python": platform.python_version(),
         "dependencies": {name: version(name) for name in ("mediapipe", "scikit-learn", "numpy", "joblib", "Pillow", "pyarrow", "opencv-contrib-python")},
-        "forest": model.get_params(), "training_samples": len(train),
+        "forest": model.get_params(), "training_samples": len(train), "training_rows_with_mirrors": 2 * len(train),
         "training_seconds": round(time.perf_counter() - start, 2),
     }
     MODEL.parent.mkdir(parents=True, exist_ok=True)
@@ -316,7 +366,7 @@ def train_model() -> None:
     write_json(REPORTS / "training.json", {
         **metadata, "validation_threshold_trials": trials,
         "split_counts": {name: {"images": len(indices), "source_letters": dict(Counter(data["labels"][indices])), "target_classes": dict(Counter(y[indices]))} for name, indices in splits.items()},
-        "limitations": ["Public data has no signer identities; these are image-group splits, not signer-independent splits.", "OTHER contains unsupported static letters; arbitrary non-sign poses remain unvalidated.", "No webcam validation has been performed by the training command."],
+        "limitations": ["Public data has no signer identities; these are image-group splits, not signer-independent splits.", "J and Z require motion and are not recognized by this single-frame model.", "The dataset contains no non-sign poses, so rejection of arbitrary hand shapes relies only on the confidence threshold and remains unvalidated.", "No webcam validation has been performed by the training command."],
     })
     print(f"Saved {MODEL}; threshold {threshold:.2f}; validation threshold qualified: {qualified}", flush=True)
 
@@ -325,7 +375,12 @@ def load_model():
     if not MODEL.exists():
         raise FileNotFoundError("Run asl_model.py train first")
     bundle = joblib.load(MODEL)
-    if bundle["metadata"]["feature_version"] != FEATURE_VERSION or tuple(bundle["metadata"]["letters"]) != LETTERS:
+    metadata = bundle["metadata"]
+    if (
+        metadata["feature_version"] != FEATURE_VERSION
+        or metadata.get("model_feature_version") != MODEL_FEATURE_VERSION
+        or tuple(metadata["letters"]) != LETTERS
+    ):
         raise ValueError("Incompatible model preprocessing or label mapping")
     if bundle["metadata"]["source"]["files"]["landmarker"]["sha256"] != sha256(LANDMARKER):
         raise ValueError("Hand landmarker checksum differs from training")
@@ -367,7 +422,7 @@ def evaluate_model() -> None:
     import matplotlib.pyplot as plt
     from sklearn.metrics import ConfusionMatrixDisplay
 
-    fig, axis = plt.subplots(figsize=(7, 6))
+    fig, axis = plt.subplots(figsize=(14, 12))
     ConfusionMatrixDisplay(matrix, display_labels=names).plot(ax=axis, colorbar=False, cmap="Blues")
     axis.set_title("Held-out ASL images including hand-detection failures")
     fig.tight_layout()
@@ -453,7 +508,7 @@ def render_webcam_output(frame: np.ndarray, result: dict, letter: str | None, el
     cv2.putText(display, title, (24, height + 72), cv2.FONT_HERSHEY_SIMPLEX, font_scale, color, thickness, cv2.LINE_AA)
     score = f"{result['confidence']:.0%}" if result["confidence"] is not None else "--"
     cv2.putText(display, f"Score: {score}  |  Processing: {elapsed_ms:.0f} ms", (24, height + 119), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (225, 225, 225), 2, cv2.LINE_AA)
-    cv2.putText(display, "A B C L Y  |  One hand  |  Q or Esc to exit", (24, height + 160), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (200, 200, 200), 2, cv2.LINE_AA)
+    cv2.putText(display, "Static letters A-Y (no J or Z)  |  One hand  |  Q or Esc to exit", (24, height + 160), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (200, 200, 200), 2, cv2.LINE_AA)
     return display
 
 
