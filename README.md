@@ -12,7 +12,7 @@ Team role:
 
 Project Board Link: https://github.com/users/g-allu/projects/2
 
-Current Status: Initial project planning and repository setup completed.
+Current Status: Current Status: Frontend, backend, and 24-letter ASL recognition model implemented. Final testing and demonstration preparation in progress.
 
 Recognition status: 24 static letters, A–Y. J and Z are signed with motion and are not supported yet.
 Model accuracy on held-out dataset images where a hand is detected: 98.0% precision, 95.3% recall. Live webcam accuracy still needs more testing.
@@ -32,7 +32,7 @@ Current Development Update: Frontend, backend, and machine learning model integr
 
 **Testing:**
 
-1. Added 47 automated frontend test cases for camera controls, recognition, transcript editing, accessibility, and transcript export.
+1. Added 54 automated frontend test cases for camera controls, recognition, transcript editing, accessibility, and transcript export.
 2. Added GitHub Actions to run automated frontend tests.
 3. Added smoke tests to check application availability, model health, and invalid image handling.
 4. Final webcam testing is required to verify recognition accuracy.
