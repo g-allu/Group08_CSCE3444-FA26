@@ -38,7 +38,7 @@ coverage.xml
 /ml/data/models/*
 !/ml/data/models/hand_landmarker.task
 /ml/artifacts/*
-!/ml/artifacts/asl_five_letters.joblib
+!/ml/artifacts/asl_alphabet.joblib
 !/ml/artifacts/model_metadata.json
 
 # Local configuration; keep shareable examples
